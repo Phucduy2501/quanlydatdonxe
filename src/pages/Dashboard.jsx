@@ -60,28 +60,51 @@ export default function Dashboard() {
     setExpenses(e || [])
   }
 
-  const filterOrders = orders.filter(o => {
-    if (!fromDate || !toDate) return true
-    return new Date(o.created_at) >= new Date(fromDate) &&
-           new Date(o.created_at) <= new Date(toDate)
-  })
+  // =========================
+  // FILTER
+  // =========================
+  const filterByDate = (arr) => {
+    if (!fromDate || !toDate) return arr
+    return arr.filter(i =>
+      new Date(i.created_at) >= new Date(fromDate) &&
+      new Date(i.created_at) <= new Date(toDate)
+    )
+  }
 
-  const revenue = filterOrders.reduce((s, o) => s + (o.total || 0), 0)
-  const cost = expenses.reduce((s, e) => s + (e.amount || 0), 0)
+  const filterOrders = filterByDate(orders)
+  const filterItems = filterByDate(items)
+  const filterExpenses = filterByDate(expenses)
+
+  // =========================
+  // KPI
+  // =========================
+  const revenue = filterOrders.reduce((s, o) => s + Number(o.total || 0), 0)
+  const cost = filterExpenses.reduce((s, e) => s + Number(e.amount || 0), 0)
   const profit = revenue - cost
 
+  const stock = products.reduce((s, p) => s + Number(p.stock || 0), 0)
+
+  // =========================
+  // LINE CHART
+  // =========================
   const group = {}
+
   filterOrders.forEach(o => {
-    const d = new Date(o.created_at).toLocaleDateString()
-    group[d] = (group[d] || 0) + o.total
+    if (!o.created_at) return
+    const d = new Date(o.created_at).toLocaleDateString("vi-VN")
+    group[d] = (group[d] || 0) + Number(o.total || 0)
   })
 
+  const sortedDates = Object.keys(group).sort(
+    (a, b) => new Date(a) - new Date(b)
+  )
+
   const lineData = {
-    labels: Object.keys(group),
+    labels: sortedDates,
     datasets: [
       {
         label: "Doanh thu",
-        data: Object.values(group),
+        data: sortedDates.map(d => group[d]),
         borderColor: "#4caf50",
         backgroundColor: "rgba(76,175,80,0.2)",
         tension: 0.4
@@ -89,11 +112,17 @@ export default function Dashboard() {
     ]
   }
 
+  // =========================
+  // PIE (TOP PRODUCT)
+  // =========================
   const productMap = {}
 
-  items.forEach(i => {
-    productMap[i.product_id] =
-      (productMap[i.product_id] || 0) + i.quantity * i.price
+  filterItems.forEach(i => {
+    const product = products.find(p => p.id === i.product_id)
+    const name = product?.name || "Không tên"
+
+    productMap[name] =
+      (productMap[name] || 0) + Number(i.quantity * i.price)
   })
 
   const sortedProducts = Object.entries(productMap)
@@ -110,6 +139,9 @@ export default function Dashboard() {
     ]
   }
 
+  // =========================
+  // BAR
+  // =========================
   const barData = {
     labels: ["Doanh thu", "Chi phí", "Lợi nhuận"],
     datasets: [
@@ -127,11 +159,14 @@ export default function Dashboard() {
         <h2>📊 Tổng quan</h2>
         <NotificationBell />
       </div>
+
+      {/* FILTER */}
       <div className="filter">
         <input type="date" onChange={e => setFromDate(e.target.value)} />
         <input type="date" onChange={e => setToDate(e.target.value)} />
       </div>
 
+      {/* KPI */}
       <div className="cards">
         <div className="card green">
           <h4>💰 Doanh thu</h4>
@@ -150,18 +185,19 @@ export default function Dashboard() {
 
         <div className="card">
           <h4>📦 Tồn kho</h4>
-          <p>{products.reduce((s, p) => s + (p.stock || 0), 0)}</p>
+          <p>{stock}</p>
         </div>
       </div>
 
+      {/* CHART */}
       <div className="charts-grid">
-        <div className="chart-box">
+        <div className="chart-box big">
           <h4>📈 Doanh thu theo ngày</h4>
           <Line data={lineData} />
         </div>
 
         <div className="chart-box">
-          <h4>📊 Tổng quan tài chính</h4>
+          <h4>📊 Tài chính</h4>
           <Bar data={barData} />
         </div>
 

@@ -1,29 +1,41 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import "../index.css";
-
 
 export default function Sidebar() {
   const [activeMenu, setActiveMenu] = useState(null);
-  const [activeItem, setActiveItem] = useState("");
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
+  // 🔥 mapping route
+  const menuMap = {
+    "Bán hàng": "/sales",
+    "Mua hàng": "/purchase",
+    "Kho": "/warehouse",
+    "Công nợ": "/debt",
+    "Quỹ tiền": "/cash",
+    "Lợi nhuận": "/profit",
+  };
+
+  // 🔥 check active theo URL
+  const isActive = (path) => location.pathname === path;
+
   return (
     <div style={{ display: "flex", position: "relative" }}>
       
+      {/* SIDEBAR */}
       <div className="sidebar">
         <h2 className="logo">MISAeShop</h2>
 
+        {/* Tổng quan */}
         <div
-          className="menu-item active"
-          onClick={() => {
-            navigate("/");        
-            setActiveMenu(null);  
-          }}
+          className={`menu-item ${isActive("/") ? "active" : ""}`}
+          onClick={() => navigate("/")}
         >
           📊 Tổng quan
         </div>
 
+        {/* Báo cáo */}
         <div
           className="menu-item"
           onMouseEnter={() => setActiveMenu("baocao")}
@@ -31,12 +43,20 @@ export default function Sidebar() {
           📈 Báo cáo
         </div>
 
-        <div className="menu-item">🧾 Đơn hàng</div>
-        <div className="menu-item">🛒 Mua hàng</div>
+        {/* Các menu khác */}
+        <div className="menu-item" onClick={() => navigate("/orders")}>
+          🧾 Đơn hàng
+        </div>
+
+        <div className="menu-item" onClick={() => navigate("/purchase")}>
+          🛒 Mua hàng
+        </div>
+
         <div className="menu-item">🏬 Kho</div>
         <div className="menu-item">💰 Quỹ tiền</div>
         <div className="menu-item">💸 Chi phí</div>
 
+        {/* Danh mục */}
         <div
           className="menu-item"
           onMouseEnter={() => setActiveMenu("danhmuc")}
@@ -45,6 +65,7 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* DROPDOWN BÁO CÁO */}
       {activeMenu === "baocao" && (
         <div
           className="dropdown-menu"
@@ -62,12 +83,14 @@ export default function Sidebar() {
           ].map((item) => (
             <p
               key={item}
-              className={`menu-child ${activeItem === item ? "active" : ""}`}
+              className={`menu-child ${
+                isActive(menuMap[item]) ? "active" : ""
+              }`}
               onClick={() => {
-                setActiveItem(item);
+                setActiveMenu(null);
 
-                if (item === "Bán hàng") {
-                  navigate("/sales"); 
+                if (menuMap[item]) {
+                  navigate(menuMap[item]);
                 }
               }}
             >
@@ -77,13 +100,14 @@ export default function Sidebar() {
         </div>
       )}
 
+      {/* DROPDOWN DANH MỤC */}
       {activeMenu === "danhmuc" && (
         <div
-            className="dropdown-menu big"
-            onMouseEnter={() => setActiveMenu("danhmuc")}
-            onMouseLeave={() => setActiveMenu(null)}
+          className="dropdown-menu big"
+          onMouseEnter={() => setActiveMenu("danhmuc")}
+          onMouseLeave={() => setActiveMenu(null)}
         >
-            <div className="column">
+          <div className="column">
             <h4>HÀNG HÓA</h4>
             <p className="menu-child">Nhóm hàng hóa</p>
             <p className="menu-child">Hàng hóa</p>
@@ -91,23 +115,31 @@ export default function Sidebar() {
             <p className="menu-child">In tem mã</p>
             <p className="menu-child">Bảng giá</p>
             <p className="menu-child">Kho</p>
-            </div>
+          </div>
 
-            <div className="column">
+          <div className="column">
             <h4>KHÁCH HÀNG</h4>
             <p className="menu-child">Nhóm khách hàng</p>
-            <p className="menu-child">Khách hàng</p>
+            <p
+              className={`menu-child ${isActive("/customers") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);   // 🔥 QUAN TRỌNG
+                navigate("/customers");
+              }}
+            >
+              Khách hàng
+            </p>
             <p className="menu-child">Hạng thẻ</p>
-            </div>
+          </div>
 
-            <div className="column">
+          <div className="column">
             <h4>KHÁC</h4>
             <p className="menu-child">Nhân viên</p>
             <p className="menu-child">Ca làm việc</p>
             <p className="menu-child">Kênh bán hàng</p>
-            </div>
+          </div>
         </div>
-        )}
+      )}
     </div>
   );
 }
