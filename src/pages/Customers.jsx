@@ -1,264 +1,547 @@
-import { useEffect, useState } from "react";
-import { supabase } from "../services/supabaseClient";
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
-import "./customers.css";
+import { useEffect, useState } from "react"
+import { supabase } from "../services/supabaseClient"
+import * as XLSX from "xlsx"
 
 export default function Customers() {
-  const [data, setData] = useState([]);
-  const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [customers, setCustomers] = useState([])
+  const [excelData, setExcelData] = useState([])
+  const [preview, setPreview] = useState([])
+  const [search, setSearch] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  const [form, setForm] = useState({
+  const [showAdd, setShowAdd] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [newCus, setNewCus] = useState({
+    code: "",
     name: "",
     phone: "",
-    email: "",
-  });
+    address: "",
+    province: "",
+    district: "",
+    ward: ""
+  })
 
-  // ================= LOAD DATA =================
-  const fetchCustomers = async () => {
-    const { data } = await supabase.from("customers").select("*");
-    setData(data || []);
-  };
+  const inputStyle = {
+  width: "100%",
+  padding: 8,
+  border: "1px solid #ddd",
+  borderRadius: 6,
+  marginBottom: 10
+}
 
+const btnSave = {
+  background: "#2ecc71",
+  color: "white",
+  border: "none",
+  padding: "8px 14px",
+  borderRadius: 6,
+  cursor: "pointer"
+}
+
+const btnCancel = {
+  background: "#e74c3c",
+  color: "white",
+  border: "none",
+  padding: "8px 14px",
+  borderRadius: 6,
+  cursor: "pointer"
+}
+
+  // ================= LOAD =================
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    fetchCustomers()
+  }, [])
 
-  // ================= SEARCH =================
-  const filtered = data.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase())
-  );
 
-  // ================= ADD CUSTOMER =================
-  const handleAdd = async () => {
-    if (!form.name || !form.phone) {
-      alert("Nhập tên + SĐT");
-      return;
+
+
+  const fetchCustomers = async () => {
+    const { data } = await supabase
+      .from("customers")
+      .select("*")
+      .order("created_at", { ascending: false })
+
+    setCustomers(data || [])
+  }
+
+  // ================= NORMALIZE =================
+  const normalize = (str) =>
+    str
+      ?.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "")
+
+  const get = (row, keywords = []) => {
+    const keys = Object.keys(row)
+
+    for (let k of keys) {
+      const nk = normalize(k)
+
+      for (let kw of keywords) {
+        const nkw = normalize(kw)
+
+        if (
+          nk.includes(nkw) ||
+          nkw.includes(nk) ||
+          (nk.includes("sdt") && nkw.includes("dien"))
+        ) {
+          return row[k]
+        }
+      }
+    }
+    return ""
+  }
+
+  // ================= DATE =================
+  const formatDate = (v) => {
+    if (!v) return null
+
+    if (typeof v === "string" && v.includes("/")) {
+      let [m, d, y] = v.split("/")
+      if (y.length === 2) y = "19" + y
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
     }
 
-    await supabase.from("customers").insert([form]);
-
-    setShowForm(false);
-    setForm({ name: "", phone: "", email: "" });
-
-    fetchCustomers();
-  };
+    const d = new Date(v)
+    if (isNaN(d)) return null
+    return d.toISOString().split("T")[0]
+  }
 
   // ================= IMPORT =================
-  const handleImport = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleFile = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
 
-    const reader = new FileReader();
+    const reader = new FileReader()
 
-    reader.onload = async (evt) => {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: "array" });
+    reader.onload = (evt) => {
+      const data = new Uint8Array(evt.target.result)
+      const wb = XLSX.read(data, { type: "array" })
+      const sheet = wb.Sheets[wb.SheetNames[0]]
 
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet);
+      const json = XLSX.utils.sheet_to_json(sheet, {
+        defval: "",
+        raw: false,
+        range: 3,
+      })
 
-      const mapped = json.map(row => ({
-        code: row["Mã khách hàng"],
-        name: row["Tên khách hàng (*)"],
-        group: row["Nhóm khách hàng"],
-        phone: row["Điện thoại (*)"],
-        debt_limit: row["Số nợ tối đa"],
-        debt_day: row["Hạn nợ (ngày)"],
-        birthday: row["Ngày sinh"],
-        gender: row["Giới tính"],
-        member_code: row["Mã thẻ thành viên"],
-        rank: row["Hạng thẻ"],
-        id_number: row["Số CMND/Hộ chiếu"],
-        province: row["Tỉnh thành"],
-        district: row["Quận/Huyện"],
-        ward: row["Phường/Xã"],
-        address: row["Số nhà, đường phố"],
-        email: row["Email"],
-        company: row["Tên công ty"],
-        tax: row["Mã số thuế"],
-        note: row["Ghi chú"],
-        staff_code: row["Mã nhân viên phụ trách"],
-        staff_name: row["Tên nhân viên phụ trách"],
-      }));
+      const mapped = json.map((row, i) => ({
+        index: i + 1,
+        code: get(row, ["ma khach"]),
+        name: get(row, ["ten khach"]),
+        phone: get(row, ["dien thoai", "sdt", "tel"]),
+        email: get(row, ["email"]),
+        address: get(row, ["dia chi"]),
+        province: get(row, ["tinh"]),
+        district: get(row, ["quan"]),
+        ward: get(row, ["phuong"]),
+        birthday: get(row, ["ngay sinh"]),
+        raw: row,
+      }))
 
-      await supabase.from("customers").insert(mapped);
+      setExcelData(mapped)
+      setPreview(mapped)
+    }
 
-      fetchCustomers();
-    };
+    reader.readAsArrayBuffer(file)
+  }
 
-    reader.readAsArrayBuffer(file);
-  };
+  // ================= SAVE =================
+  const handleSave = async () => {
+    if (!excelData.length) return alert("Không có dữ liệu")
+
+    setLoading(true)
+
+    const clean = excelData.map((v) => ({
+      id: crypto.randomUUID(),
+      code: v.code || "",
+      name: v.name || "",
+      phone: v.phone || "",
+      email: v.email || "",
+      address: v.address || "",
+      province: v.province || "",
+      district: v.district || "",
+      ward: v.ward || "",
+      birthday: formatDate(v.birthday) || null,
+    }))
+
+    const { error } = await supabase.from("customers").insert(clean)
+
+    if (error) {
+      console.log(error)
+      alert("❌ Lỗi insert")
+    } else {
+      alert("✅ Lưu thành công")
+      await fetchCustomers()
+    }
+
+    setLoading(false)
+  }
+
+  // ================= ADD =================
+  const handleAdd = async () => {
+    if (!newCus.name) return alert("Thiếu tên")
+    if (!newCus.phone) return alert("Thiếu SĐT")
+
+    const { error } = await supabase.from("customers").insert([
+      {
+        name: newCus.name,
+        phone: newCus.phone,
+        address: newCus.address
+      }
+    ])
+
+    if (error) {
+      alert("Lỗi insert")
+      console.log(error)
+      return
+    }
+
+    alert("Thêm thành công")
+
+    setShowAdd(false)
+    setNewCus({ name: "", phone: "", address: "" })
+
+    fetchCustomers() // reload lại list
+  }
+
+
+  const handleDelete = async (id) => {
+  if (!confirm("Xoá khách này?")) return
+
+  const { error } = await supabase
+    .from("customers")
+    .delete()
+    .eq("id", id)
+
+  if (error) {
+    alert("❌ Lỗi xoá")
+    console.log(error)
+    return
+  }
+
+  fetchCustomers()
+}
+
+
+
+  const handleUpdate = async () => {
+  const { error } = await supabase
+    .from("customers")
+    .update({
+      name: editing.name,
+      phone: editing.phone,
+      address: editing.address,
+      province: editing.province,
+      district: editing.district,
+      ward: editing.ward
+    })
+    .eq("id", editing.id)
+
+  if (error) {
+    alert("❌ Lỗi update")
+    console.log(error)
+    return
+  }
+
+  alert("✅ Cập nhật thành công")
+  setEditing(null)
+  fetchCustomers()
+}
+
+  // ================= SEARCH =================
+  const filtered = customers.filter((c) =>
+    c.name?.toLowerCase().includes(search.toLowerCase())
+  )
 
   // ================= EXPORT =================
-  const handleExport = () => {
-    const exportData = data.map(c => ({
-      "Mã khách hàng": c.code,
-      "Tên khách hàng (*)": c.name,
-      "Nhóm khách hàng": c.group,
-      "Điện thoại (*)": c.phone,
-      "Số nợ tối đa": c.debt_limit,
-      "Hạn nợ (ngày)": c.debt_day,
-      "Ngày sinh": c.birthday,
-      "Giới tính": c.gender,
-      "Mã thẻ thành viên": c.member_code,
-      "Hạng thẻ": c.rank,
-      "Số CMND/Hộ chiếu": c.id_number,
-      "Tỉnh thành": c.province,
-      "Quận/Huyện": c.district,
-      "Phường/Xã": c.ward,
-      "Số nhà, đường phố": c.address,
-      "Email": c.email,
-      "Tên công ty": c.company,
-      "Mã số thuế": c.tax,
-      "Ghi chú": c.note,
-      "Mã nhân viên phụ trách": c.staff_code,
-      "Tên nhân viên phụ trách": c.staff_name,
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(wb, ws, "Customers");
-
-    const buffer = XLSX.write(wb, {
-      bookType: "xlsx",
-      type: "array",
-    });
-
-    const blob = new Blob([buffer], {
-      type: "application/octet-stream",
-    });
-
-    saveAs(blob, "khach-hang.xlsx");
-  };
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(customers)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Customers")
+    XLSX.writeFile(wb, "customers.xlsx")
+  }
 
   return (
-    <div className="customer-container">
+    <div className="misa-container">
       <h2>👤 Quản lý khách hàng</h2>
 
-      {/* TOOLBAR */}
-      <div className="customer-toolbar">
+      <div className="toolbar">
+        <input placeholder="🔍 Tìm..." onChange={(e) => setSearch(e.target.value)} />
+        <input type="file" onChange={handleFile} />
 
-        <input
-            placeholder="🔍 Tìm khách..."
-            onChange={(e) => setSearch(e.target.value)}
-        />
-
-        <button onClick={() => setShowForm(true)}>
-            + Thêm
+        <button onClick={handleSave} disabled={loading}>
+          💾 Lưu
         </button>
 
-        {/* IMPORT đẹp hơn */}
-        <label className="import-btn">
-            📥 Import Excel
-            <input
-            type="file"
-            accept=".xlsx, .xls"
-            onChange={handleImport}
-            hidden
-            />
-        </label>
+        <button onClick={exportExcel}>📤 Xuất</button>
 
-        {/* EXPORT */}
-        <button onClick={handleExport}>
-            📤 Xuất Excel
-        </button>
+        <button onClick={() => setShowAdd(true)}>➕ Thêm</button>
+      </div>
 
+      {/* PREVIEW */}
+      {preview.length > 0 && (
+        <div>
+          <h4>Preview ({preview.length})</h4>
+          <table>
+            <thead>
+              <tr>
+                {Object.keys(preview[0].raw).map((k) => (
+                  <th key={k}>{k}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {preview.map((r, i) => (
+                <tr key={i}>
+                  {Object.values(r.raw).map((v, idx) => (
+                    <td key={idx}>{v}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      )}
 
       {/* TABLE */}
-      <div className="table-card">
-        <table className="customer-table">
-            <thead>
-            <tr>
-                <th>Mã KH</th>
-                <th>Tên</th>
-                <th>Nhóm</th>
-                <th>SĐT</th>
-                <th>Email</th>
-                <th>Giới tính</th>
-                <th>Ngày sinh</th>
-                <th>Hạng thẻ</th>
-                <th>Mã thẻ</th>
-                <th>CMND</th>
-                <th>Công ty</th>
-                <th>MST</th>
-                <th>Tỉnh</th>
-                <th>Quận</th>
-                <th>Phường</th>
-                <th>Địa chỉ</th>
-                <th>Nợ tối đa</th>
-                <th>Hạn nợ</th>
-                <th>Nhân viên</th>
-                <th>Ghi chú</th>
+      <table>
+        <thead>
+          <tr>
+            <th>Mã</th>
+            <th>Tên</th>
+            <th>SĐT</th>
+            <th>Địa chỉ</th>
+            <th>Tỉnh</th>
+            <th>Quận</th>
+            <th>Phường</th>
+            <th>Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((c) => (
+            <tr key={c.id}>
+              <td>{c.code}</td>
+              <td>{c.name}</td>
+              <td>{c.phone}</td>
+              <td>{c.address}</td>
+              <td>{c.province}</td>
+              <td>{c.district}</td>
+              <td>{c.ward}</td>
+              <td>
+                <button onClick={() => setEditing(c)}>✏️</button>
+                <button onClick={() => handleDelete(c.id)}>🗑</button>
+              </td>
             </tr>
-            </thead>
+          ))}
+        </tbody>
+      </table>
 
-            <tbody>
-            {filtered.map((c, index) => (
-                <tr key={index}>
-                <td>{c.code}</td>
-                <td>{c.name}</td>
-                <td>{c.group}</td>
-                <td>{c.phone}</td>
-                <td>{c.email}</td>
-                <td>{c.gender}</td>
-                <td>{c.birthday}</td>
-                <td>{c.rank}</td>
-                <td>{c.member_code}</td>
-                <td>{c.id_number}</td>
-                <td>{c.company}</td>
-                <td>{c.tax}</td>
-                <td>{c.province}</td>
-                <td>{c.district}</td>
-                <td>{c.ward}</td>
-                <td>{c.address}</td>
-                <td>{c.debt_limit}</td>
-                <td>{c.debt_day}</td>
-                <td>{c.staff_name}</td>
-                <td>{c.note}</td>
-                </tr>
-            ))}
-            </tbody>
-        </table>
+      {showAdd && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999
+          }}
+          onClick={() => setShowAdd(false)} // click ngoài để đóng
+        >
+          <div
+            onClick={(e) => e.stopPropagation()} // chặn click xuyên
+            style={{
+              background: "white",
+              padding: 24,
+              borderRadius: 12,
+              width: 420,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+            }}
+          >
+            <h3 style={{ marginBottom: 15 }}>➕ Thêm khách hàng</h3>
+
+            {/* MÃ */}
+            <input
+              placeholder="Mã khách"
+              value={newCus.code}
+              onChange={(e) =>
+                setNewCus({ ...newCus, code: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* TÊN */}
+            <input
+              placeholder="Tên khách *"
+              value={newCus.name}
+              autoFocus
+              onChange={(e) =>
+                setNewCus({ ...newCus, name: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* SĐT */}
+            <input
+              placeholder="SĐT *"
+              value={newCus.phone}
+              onChange={(e) =>
+                setNewCus({ ...newCus, phone: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* ĐỊA CHỈ */}
+            <input
+              placeholder="Địa chỉ"
+              value={newCus.address}
+              onChange={(e) =>
+                setNewCus({ ...newCus, address: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* TỈNH */}
+            <input
+              placeholder="Tỉnh"
+              value={newCus.province}
+              onChange={(e) =>
+                setNewCus({ ...newCus, province: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* QUẬN */}
+            <input
+              placeholder="Quận"
+              value={newCus.district}
+              onChange={(e) =>
+                setNewCus({ ...newCus, district: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* PHƯỜNG */}
+            <input
+              placeholder="Phường"
+              value={newCus.ward}
+              onChange={(e) =>
+                setNewCus({ ...newCus, ward: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            {/* BUTTON */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 10,
+                marginTop: 15
+              }}
+            >
+              <button style={btnSave} onClick={handleAdd}>
+                💾 Lưu
+              </button>
+
+              <button
+                style={btnCancel}
+                onClick={() => setShowAdd(false)}
+              >
+                ❌ Huỷ
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-      {/* FORM POPUP */}
-      {showForm && (
-        <div className="modal">
-          <div className="modal-box">
-            <h3>Thêm khách</h3>
+      {editing && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999
+          }}
+          onClick={() => setEditing(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              padding: 24,
+              borderRadius: 12,
+              width: 420
+            }}
+          >
+            <h3>✏️ Sửa khách hàng</h3>
 
             <input
-              placeholder="Tên"
+              value={editing.name}
               onChange={(e) =>
-                setForm({ ...form, name: e.target.value })
+                setEditing({ ...editing, name: e.target.value })
               }
+              style={inputStyle}
             />
 
             <input
-              placeholder="SĐT"
+              value={editing.phone}
               onChange={(e) =>
-                setForm({ ...form, phone: e.target.value })
+                setEditing({ ...editing, phone: e.target.value })
               }
+              style={inputStyle}
             />
 
             <input
-              placeholder="Email"
+              value={editing.address}
               onChange={(e) =>
-                setForm({ ...form, email: e.target.value })
+                setEditing({ ...editing, address: e.target.value })
               }
+              style={inputStyle}
             />
 
-            <div className="modal-btn">
-              <button onClick={handleAdd}>Lưu</button>
-              <button onClick={() => setShowForm(false)}>Hủy</button>
+            <input
+              value={editing.province}
+              onChange={(e) =>
+                setEditing({ ...editing, province: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              value={editing.district}
+              onChange={(e) =>
+                setEditing({ ...editing, district: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              value={editing.ward}
+              onChange={(e) =>
+                setEditing({ ...editing, ward: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={btnSave} onClick={handleUpdate}>
+                💾 Lưu
+              </button>
+
+              <button style={btnCancel} onClick={() => setEditing(null)}>
+                ❌ Huỷ
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }
