@@ -12,7 +12,7 @@ export default function Sidebar() {
     "Bán hàng": "/sales",
     "Mua hàng": "/purchase",
     "Kho": "/warehouse",
-    "Công nợ": "/debt",
+    "Công nợ": "/debts",
     "Quỹ tiền": "/cash",
     "Lợi nhuận": "/profit",
   };
