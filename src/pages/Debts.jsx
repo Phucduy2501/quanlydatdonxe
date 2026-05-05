@@ -3,81 +3,88 @@ import { supabase } from "../services/supabaseClient"
 import * as XLSX from "xlsx"
 
 export default function Debts() {
-  const [data, setData] = useState([])
-  const [excelData, setExcelData] = useState([])
+  const [debts, setDebts] = useState([])
   const [preview, setPreview] = useState([])
-  const [search, setSearch] = useState("")
-  const [showAdd, setShowAdd] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({})
+  const [excelData, setExcelData] = useState([])
+  const [customers, setCustomers] = useState([])
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetchData()
+    fetchDebts()
+    fetchCustomers()
   }, [])
 
-  const fetchData = async () => {
-    const { data } = await supabase
-      .from("customers")
-      .select("*")
-      .order("created_at", { ascending: false })
-
-    setData(data || [])
+  const fetchDebts = async () => {
+    const { data } = await supabase.from("customer_debts").select("*")
+    setDebts(data || [])
   }
 
-  // ================= HELPER =================
-  const normalize = (str) =>
-    str
-      ?.toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "")
-
-  const get = (row, keywords = []) => {
-    for (let k in row) {
-      const nk = normalize(k)
-      for (let kw of keywords) {
-        if (nk.includes(normalize(kw))) return row[k]
-      }
-    }
-    return ""
+  const fetchCustomers = async () => {
+    const { data } = await supabase.from("customers").select("*")
+    setCustomers(data || [])
   }
 
-  // ================= IMPORT EXCEL =================
+  // ===== MONEY =====
+  const parseMoney = (v) => {
+    if (!v) return 0
+    return Number(v.toString().replace(/[^0-9\-]/g, "")) || 0
+  }
+
+  // ===== IMPORT =====
   const handleFile = (e) => {
+    if (!customers.length) {
+      alert("⚠️ Chưa load khách hàng")
+      return
+    }
+
     const file = e.target.files[0]
+    if (!file) return
+
     const reader = new FileReader()
 
     reader.onload = (evt) => {
-      const wb = XLSX.read(evt.target.result, { type: "array" })
+      const data = new Uint8Array(evt.target.result)
+      const wb = XLSX.read(data, { type: "array" })
       const sheet = wb.Sheets[wb.SheetNames[0]]
 
       const json = XLSX.utils.sheet_to_json(sheet, {
         defval: "",
         raw: false,
-        range: 6, // ✅ FIX HEADER
+        range: 7,
       })
 
-      const mapped = json.map((row, i) => {
-        const open = Number(get(row, ["no dau ky"])) || 0
-        const inc = Number(get(row, ["tang"])) || 0
-        const dec = Number(get(row, ["giam"])) || 0
+      if (!json.length) {
+        alert("❌ Không đọc được file")
+        return
+      }
+
+      console.log("ROW:", json[0])
+
+      const mapped = json.map((row) => {
+        // 👉 LẤY THEO INDEX CỘT
+        const code = row["__EMPTY"]
+        const name = row["__EMPTY_1"]
+
+        const open = parseMoney(row["__EMPTY_5"])
+        const inc = parseMoney(row["__EMPTY_6"])
+        const dec = parseMoney(row["__EMPTY_7"])
+
+        const cus = customers.find(
+          (c) => String(c.code) === String(code)
+        )
+
+        const debt_end = open + inc - dec
 
         return {
-          index: i + 1,
-          code: get(row, ["ma khach"]),
-          name: get(row, ["ten khach"]),
-          phone: get(row, ["dien thoai"]),
-          email: get(row, ["email"]),
-          group_name: get(row, ["nhom"]),
-          address: get(row, ["dia chi"]),
-          province: get(row, ["tinh"]),
-          district: get(row, ["quan"]),
-          ward: get(row, ["phuong"]),
+          id: crypto.randomUUID(),
+          customer_code: code || "",
+          customer_name: cus?.name || name || "",
+          phone: cus?.phone || "",
 
           debt_open: open,
           debt_increase: inc,
           debt_decrease: dec,
-          debt_end: open + inc - dec,
+          debt_end,
         }
       })
 
@@ -88,188 +95,99 @@ export default function Debts() {
     reader.readAsArrayBuffer(file)
   }
 
-  // ================= SAVE (UPDATE) =================
+  // ===== SAVE =====
   const handleSave = async () => {
-    for (let v of excelData) {
-      if (!v.code) continue
-
-      const { error } = await supabase
-        .from("customers")
-        .update({
-          name: v.name,
-          phone: v.phone,
-          email: v.email,
-          address: v.address,
-          province: v.province,
-          district: v.district,
-          ward: v.ward,
-          group_name: v.group_name,
-          debt_open: v.debt_open,
-          debt_increase: v.debt_increase,
-          debt_decrease: v.debt_decrease,
-          debt_end: v.debt_end,
-        })
-        .eq("code", v.code)
-
-      if (error) console.log("Lỗi:", v, error)
+    if (!excelData.length) {
+      alert("⚠️ Không có dữ liệu")
+      return
     }
 
-    alert("✅ Cập nhật công nợ thành công")
-    fetchData()
-  }
+    setLoading(true)
 
-  // ================= ADD =================
-  const handleAdd = async () => {
-    if (!form.code) return alert("Thiếu mã khách")
-
-    const debt_end =
-      (form.debt_open || 0) +
-      (form.debt_increase || 0) -
-      (form.debt_decrease || 0)
+    await supabase.from("customer_debts").delete().neq("id", "")
 
     const { error } = await supabase
-      .from("customers")
-      .update({ ...form, debt_end })
-      .eq("code", form.code)
+      .from("customer_debts")
+      .insert(excelData)
 
-    if (error) return alert("❌ Lỗi")
+    if (error) {
+      console.log(error)
+      alert("❌ Lỗi lưu")
+    } else {
+      alert("✅ Lưu thành công")
+      fetchDebts()
+      setPreview([])
+    }
 
-    setShowAdd(false)
-    setForm({})
-    fetchData()
+    setLoading(false)
   }
 
-  // ================= UPDATE =================
-  const handleUpdate = async () => {
-    const debt_end =
-      (editing.debt_open || 0) +
-      (editing.debt_increase || 0) -
-      (editing.debt_decrease || 0)
-
-    const { error } = await supabase
-      .from("customers")
-      .update({ ...editing, debt_end })
-      .eq("id", editing.id)
-
-    if (error) return alert("❌ Lỗi update")
-
-    setEditing(null)
-    fetchData()
-  }
-
-  // ================= DELETE =================
-  const handleDelete = async (id) => {
-    if (!confirm("Xoá?")) return
-    await supabase.from("customers").delete().eq("id", id)
-    fetchData()
-  }
-
-  const filtered = data.filter((c) =>
-    c.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const fm = (n) => (n || 0).toLocaleString()
 
   return (
     <div className="misa-container">
       <h2>💰 Công nợ khách hàng</h2>
 
       <div className="toolbar">
-        <input placeholder="🔍 Tìm..." onChange={(e) => setSearch(e.target.value)} />
         <input type="file" onChange={handleFile} />
-        <button onClick={handleSave}>💾 Import công nợ</button>
-        <button onClick={() => setShowAdd(true)}>➕ Thêm</button>
+        <button onClick={handleSave} disabled={loading}>
+          💾 Lưu
+        </button>
       </div>
 
-      {/* PREVIEW */}
       {preview.length > 0 && (
-        <div>
-          <h4>Preview ({preview.length})</h4>
-          <table>
-            <tbody>
-              {preview.map((r) => (
-                <tr key={r.index}>
-                  <td>{r.code}</td>
-                  <td>{r.name}</td>
-                  <td>{r.debt_end}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Mã</th>
+              <th>Tên</th>
+              <th>Nợ đầu</th>
+              <th>Tăng</th>
+              <th>Giảm</th>
+              <th>Nợ cuối</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {preview.map((r, i) => (
+              <tr key={i}>
+                <td>{r.customer_code}</td>
+                <td>{r.customer_name}</td>
+                <td>{fm(r.debt_open)}</td>
+                <td>{fm(r.debt_increase)}</td>
+                <td>{fm(r.debt_decrease)}</td>
+                <td style={{ color: "red" }}>
+                  {fm(r.debt_end)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
-      {/* TABLE */}
       <table>
         <thead>
           <tr>
             <th>Mã</th>
             <th>Tên</th>
             <th>SĐT</th>
-            <th>Nợ đầu</th>
-            <th>Tăng</th>
-            <th>Giảm</th>
             <th>Nợ cuối</th>
-            <th></th>
           </tr>
         </thead>
 
         <tbody>
-          {filtered.map((c) => (
-            <tr key={c.id}>
-              <td>{c.code}</td>
-              <td>{c.name}</td>
-              <td>{c.phone}</td>
-              <td>{c.debt_open}</td>
-              <td>{c.debt_increase}</td>
-              <td>{c.debt_decrease}</td>
-              <td style={{ color: "red" }}>{c.debt_end}</td>
-
-              <td>
-                <button onClick={() => setEditing(c)}>✏️</button>
-                <button onClick={() => handleDelete(c.id)}>🗑</button>
+          {debts.map((d) => (
+            <tr key={d.id}>
+              <td>{d.customer_code}</td>
+              <td>{d.customer_name}</td>
+              <td>{d.phone}</td>
+              <td style={{ color: "red" }}>
+                {fm(d.debt_end)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
-      {/* ADD */}
-      {showAdd && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <h3>➕ Thêm công nợ</h3>
-
-            <input placeholder="Mã KH" onChange={(e) => setForm({ ...form, code: e.target.value })} />
-            <input placeholder="Tên" onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <input placeholder="SĐT" onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-
-            <input placeholder="Nợ đầu" onChange={(e) => setForm({ ...form, debt_open: Number(e.target.value) })} />
-            <input placeholder="Tăng" onChange={(e) => setForm({ ...form, debt_increase: Number(e.target.value) })} />
-            <input placeholder="Giảm" onChange={(e) => setForm({ ...form, debt_decrease: Number(e.target.value) })} />
-
-            <button onClick={handleAdd}>💾 Lưu</button>
-            <button onClick={() => setShowAdd(false)}>❌</button>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT */}
-      {editing && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <h3>✏️ Sửa</h3>
-
-            <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            <input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
-
-            <input value={editing.debt_open} onChange={(e) => setEditing({ ...editing, debt_open: Number(e.target.value) })} />
-            <input value={editing.debt_increase} onChange={(e) => setEditing({ ...editing, debt_increase: Number(e.target.value) })} />
-            <input value={editing.debt_decrease} onChange={(e) => setEditing({ ...editing, debt_decrease: Number(e.target.value) })} />
-
-            <button onClick={handleUpdate}>💾</button>
-            <button onClick={() => setEditing(null)}>❌</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
