@@ -7,18 +7,17 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 🔥 mapping route
+  const isActive = (path) => location.pathname === path;
+
   const menuMap = {
     "Bán hàng": "/sales",
+    "Bán hàng đa kênh": "/multi-sales",
     "Mua hàng": "/purchase",
-    "Kho": "/warehouse",
+    "Kho": "/inventory",
     "Công nợ": "/debts",
     "Quỹ tiền": "/cash",
     "Lợi nhuận": "/profit",
   };
-
-  // 🔥 check active theo URL
-  const isActive = (path) => location.pathname === path;
 
   return (
     <div style={{ display: "flex", position: "relative" }}>
@@ -27,7 +26,6 @@ export default function Sidebar() {
       <div className="sidebar">
         <h2 className="logo">MISAeShop</h2>
 
-        {/* Tổng quan */}
         <div
           className={`menu-item ${isActive("/") ? "active" : ""}`}
           onClick={() => navigate("/")}
@@ -43,18 +41,40 @@ export default function Sidebar() {
           📈 Báo cáo
         </div>
 
-        {/* Các menu khác */}
-        <div className="menu-item" onClick={() => navigate("/orders")}>
+        <div
+          className={`menu-item ${isActive("/orders") ? "active" : ""}`}
+          onClick={() => navigate("/orders")}
+        >
           🧾 Đơn hàng
         </div>
 
-        <div className="menu-item" onClick={() => navigate("/purchase")}>
+        <div
+          className={`menu-item ${isActive("/purchase") ? "active" : ""}`}
+          onClick={() => navigate("/purchase")}
+        >
           🛒 Mua hàng
         </div>
 
-        <div className="menu-item">🏬 Kho</div>
-        <div className="menu-item">💰 Quỹ tiền</div>
-        <div className="menu-item">💸 Chi phí</div>
+        <div
+          className={`menu-item ${isActive("/inventory") ? "active" : ""}`}
+          onClick={() => navigate("/inventory")}
+        >
+          🏬 Kho
+        </div>
+
+        <div
+          className={`menu-item ${isActive("/cash") ? "active" : ""}`}
+          onClick={() => navigate("/cash")}
+        >
+          💰 Quỹ tiền
+        </div>
+
+        <div
+          className={`menu-item ${isActive("/expenses") ? "active" : ""}`}
+          onClick={() => navigate("/expenses")}
+        >
+          💸 Chi phí
+        </div>
 
         {/* Danh mục */}
         <div
@@ -72,15 +92,7 @@ export default function Sidebar() {
           onMouseEnter={() => setActiveMenu("baocao")}
           onMouseLeave={() => setActiveMenu(null)}
         >
-          {[
-            "Bán hàng",
-            "Bán hàng đa kênh",
-            "Mua hàng",
-            "Kho",
-            "Công nợ",
-            "Quỹ tiền",
-            "Lợi nhuận",
-          ].map((item) => (
+          {Object.keys(menuMap).map((item) => (
             <p
               key={item}
               className={`menu-child ${
@@ -88,10 +100,7 @@ export default function Sidebar() {
               }`}
               onClick={() => {
                 setActiveMenu(null);
-
-                if (menuMap[item]) {
-                  navigate(menuMap[item]);
-                }
+                navigate(menuMap[item]);
               }}
             >
               {item}
@@ -107,36 +116,131 @@ export default function Sidebar() {
           onMouseEnter={() => setActiveMenu("danhmuc")}
           onMouseLeave={() => setActiveMenu(null)}
         >
+          {/* HÀNG HÓA */}
           <div className="column">
             <h4>HÀNG HÓA</h4>
-            <p className="menu-child">Nhóm hàng hóa</p>
-            <p className="menu-child">Hàng hóa</p>
-            <p className="menu-child">Đơn vị tính</p>
+
+            <p
+              className={`menu-child ${isActive("/product-groups") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/product-groups");
+              }}
+            >
+              Nhóm hàng hóa
+            </p>
+
+            <p
+              className={`menu-child ${isActive("/products") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/products");
+              }}
+            >
+              Hàng hóa
+            </p>
+
+            <p
+              className={`menu-child ${isActive("/units") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/units");
+              }}
+            >
+              Đơn vị tính
+            </p>
+
             <p className="menu-child">In tem mã</p>
-            <p className="menu-child">Bảng giá</p>
-            <p className="menu-child">Kho</p>
+
+            <p
+              className={`menu-child ${isActive("/price-list") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/price-list");
+              }}
+            >
+              Bảng giá
+            </p>
+
+            <p
+              className={`menu-child ${isActive("/inventory") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/inventory");
+              }}
+            >
+              Kho
+            </p>
           </div>
 
+          {/* KHÁCH HÀNG */}
           <div className="column">
             <h4>KHÁCH HÀNG</h4>
-            <p className="menu-child">Nhóm khách hàng</p>
+
             <p
-              className={`menu-child ${isActive("/customers") ? "active" : ""}`}
+              className={`menu-child ${isActive("/customer-groups") ? "active" : ""}`}
               onClick={() => {
-                setActiveMenu(null);   // 🔥 QUAN TRỌNG
-                navigate("/customers");
+                setActiveMenu(null);
+                navigate("/customer-groups");
+              }}
+            >
+              Nhóm khách hàng
+            </p>
+
+           <p
+              className={`menu-child ${isActive("/Customers") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/Customers");
               }}
             >
               Khách hàng
             </p>
-            <p className="menu-child">Hạng thẻ</p>
+
+            <p
+              className={`menu-child ${isActive("/membership") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/membership");
+              }}
+            >
+              Hạng thẻ
+            </p>
           </div>
 
+          {/* KHÁC */}
           <div className="column">
             <h4>KHÁC</h4>
-            <p className="menu-child">Nhân viên</p>
-            <p className="menu-child">Ca làm việc</p>
-            <p className="menu-child">Kênh bán hàng</p>
+
+            <p
+              className={`menu-child ${isActive("/staff") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/staff");
+              }}
+            >
+              Nhân viên
+            </p>
+
+            <p
+              className={`menu-child ${isActive("/shifts") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/shifts");
+              }}
+            >
+              Ca làm việc
+            </p>
+
+            <p
+              className={`menu-child ${isActive("/channels") ? "active" : ""}`}
+              onClick={() => {
+                setActiveMenu(null);
+                navigate("/channels");
+              }}
+            >
+              Kênh bán hàng
+            </p>
           </div>
         </div>
       )}

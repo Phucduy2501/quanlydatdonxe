@@ -102,3 +102,553 @@ body {
 .menu-child.active {
   background: rgba(255, 255, 255, 0.3);
 }
+
+.dropdown-menu {
+  position: absolute;
+  left: 220px;
+  top: 100px;
+  background: #2f3e9e;
+  color: white;
+  padding: 15px;
+  border-radius: 10px;
+  z-index: 999;
+}
+
+.page {
+  padding: 20px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background: #2f3e9e;
+  color: white;
+}
+
+td, th {
+  padding: 8px;
+  border: 1px solid #ddd;
+}
+
+/* staff */
+.staff-page {
+  padding: 20px;
+}
+
+.staff-page h2 {
+  margin-bottom: 15px;
+}
+
+.staff-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.staff-toolbar input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 250px;
+}
+
+.staff-toolbar button {
+  background: #2f3e9e;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.table-box {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  background: #2f3e9e;
+  color: white;
+}
+
+th, td {
+  padding: 10px;
+  text-align: left;
+}
+
+tbody tr:nth-child(even) {
+  background: #f5f6fa;
+}
+
+tbody button {
+  margin-right: 5px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+tbody button:first-child {
+  background: #4caf50;
+  color: white;
+}
+
+tbody button:last-child {
+  background: #f44336;
+  color: white;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
+.staff-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.staff-toolbar input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.staff-toolbar .search {
+  margin-left: auto;
+  width: 220px;
+}
+
+
+/* shifts */
+.staff-page { padding: 20px; }
+
+.staff-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.staff-toolbar input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.staff-toolbar button {
+  background: #2f3e9e;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.staff-toolbar .search {
+  margin-left: auto;
+  width: 220px;
+}
+
+.table-box {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  background: #2f3e9e;
+  color: white;
+}
+
+th, td {
+  padding: 10px;
+}
+
+tbody tr:nth-child(even) {
+  background: #f5f6fa;
+}
+
+tbody button {
+  margin-right: 5px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+}
+
+tbody button:first-child {
+  background: #4caf50;
+  color: white;
+}
+
+tbody button:last-child {
+  background: #f44336;
+  color: white;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
+.shift-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.days {
+  margin-bottom: 15px;
+}
+
+.days button {
+  margin-right: 5px;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.active-day {
+  background: #2f3e9e;
+  color: white;
+}
+
+/* channels */
+.active-tag {
+  background: #4caf50;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.off-tag {
+  background: #ccc;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.staff-toolbar input {
+  min-width: 150px;
+}
+
+
+/* priceList */
+.page {
+  padding: 10px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+}
+
+.list-item {
+  padding: 8px;
+  background: #eee;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+
+.list-item.active {
+  background: #3f51b5;
+  color: white;
+}
+
+button {
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background: #3f51b5;
+  color: white;
+  padding: 6px;
+}
+
+td {
+  padding: 6px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* product */
+.page {
+  padding: 10px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+}
+
+input {
+  padding: 6px;
+}
+
+button {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background: #3f51b5;
+  color: white;
+  padding: 6px;
+}
+
+td {
+  padding: 6px;
+  border-bottom: 1px solid #ddd;
+}
+
+
+/* units */
+.page {
+  padding: 20px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.toolbar input {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.search {
+  margin-left: auto;
+}
+
+.btn-primary {
+  background: #3b4cca;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-edit {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  margin-right: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-delete {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.table-wrapper {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+thead {
+  background: #3b4cca;
+  color: white;
+}
+
+th, td {
+  padding: 10px;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+}
+
+
+/* products-group */
+.page {
+  padding: 20px;
+}
+
+.title {
+  margin-bottom: 15px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.toolbar input {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.search {
+  margin-left: auto;
+}
+
+.btn-primary {
+  background: #3b4cca;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-edit {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  margin-right: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-delete {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.table-wrapper {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+thead {
+  background: #3b4cca;
+  color: white;
+}
+
+th, td {
+  padding: 10px;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+}
+
+/* expenses */
+.page {
+  padding: 20px;
+}
+
+.title {
+  margin-bottom: 15px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.toolbar input {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.search {
+  margin-left: auto;
+}
+
+.btn-primary {
+  background: #3b4cca;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-edit {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  margin-right: 5px;
+  border-radius: 5px;
+}
+
+.btn-delete {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+
+.table-wrapper {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+thead {
+  background: #3b4cca;
+  color: white;
+}
+
+th, td {
+  padding: 10px;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+}

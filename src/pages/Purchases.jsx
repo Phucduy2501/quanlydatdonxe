@@ -35,46 +35,37 @@ export default function Purchase() {
 
   // ================= FETCH (OPTIMIZED) =================
   const fetchData = async () => {
-    let query = supabase
+    const { data, error } = await supabase
       .from("order_items")
-      .select(`
-        quantity,
-        price,
-        product_id,
-        products(name),
-        orders(created_at)
-      `);
+      .select("*"); // ❗ bỏ join
 
-    const { data: items } = await query;
+    if (error) {
+      console.log("ERROR:", error);
+      return;
+    }
 
+    if (!data) return; // ❗ chống crash
+
+    // map lại thủ công
     const map = {};
 
-    items.forEach(i => {
-      const date = new Date(i.orders.created_at);
+    data.forEach((item) => {
+      const id = item.product_id;
 
-      if (fromDate && toDate) {
-        if (date < new Date(fromDate) || date > new Date(toDate)) return;
-      }
-
-      const id = i.product_id;
       if (!map[id]) {
         map[id] = {
-          id,
-          name: i.products?.name || "N/A",
+          product_id: id,
+          name: "Sản phẩm",
           qty: 0,
-          value: 0
+          total: 0,
         };
       }
 
-      map[id].qty += i.quantity;
-      map[id].value += i.quantity * i.price;
+      map[id].qty += item.quantity || 0;
+      map[id].total += (item.quantity || 0) * (item.price || 0);
     });
 
-    const result = Object.values(map).map(r => ({
-      ...r,
-      avg: r.qty ? r.value / r.qty : 0
-    }));
-
+    const result = Object.values(map);
     setData(result);
   };
 
