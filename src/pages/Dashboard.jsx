@@ -38,14 +38,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData()
-
-    const channel = supabase
-      .channel("realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetchData)
-      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, fetchData)
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
   }, [])
 
   const fetchData = async () => {
@@ -61,14 +53,20 @@ export default function Dashboard() {
   }
 
   // =========================
-  // FILTER
+  // FILTER FIX (QUAN TRỌNG)
   // =========================
   const filterByDate = (arr) => {
     if (!fromDate || !toDate) return arr
-    return arr.filter(i =>
-      new Date(i.created_at) >= new Date(fromDate) &&
-      new Date(i.created_at) <= new Date(toDate)
-    )
+
+    const from = new Date(fromDate)
+    const to = new Date(toDate)
+    to.setHours(23, 59, 59)
+
+    return arr.filter(i => {
+      if (!i.created_at) return false
+      const d = new Date(i.created_at)
+      return d >= from && d <= to
+    })
   }
 
   const filterOrders = filterByDate(orders)
@@ -85,19 +83,20 @@ export default function Dashboard() {
   const stock = products.reduce((s, p) => s + Number(p.stock || 0), 0)
 
   // =========================
-  // LINE CHART
+  // GROUP BY DATE (FIX SAI NGÀY)
   // =========================
   const group = {}
 
   filterOrders.forEach(o => {
     if (!o.created_at) return
-    const d = new Date(o.created_at).toLocaleDateString("vi-VN")
-    group[d] = (group[d] || 0) + Number(o.total || 0)
+
+    const d = new Date(o.created_at)
+    const key = d.toISOString().slice(0, 10) // YYYY-MM-DD
+
+    group[key] = (group[key] || 0) + Number(o.total || 0)
   })
 
-  const sortedDates = Object.keys(group).sort(
-    (a, b) => new Date(a) - new Date(b)
-  )
+  const sortedDates = Object.keys(group).sort()
 
   const lineData = {
     labels: sortedDates,
@@ -113,13 +112,13 @@ export default function Dashboard() {
   }
 
   // =========================
-  // PIE (TOP PRODUCT)
+  // TOP PRODUCT (FIX CHẬM)
   // =========================
   const productMap = {}
 
   filterItems.forEach(i => {
-    const product = products.find(p => p.id === i.product_id)
-    const name = product?.name || "Không tên"
+    const name =
+      products.find(p => p.id === i.product_id)?.name || "Không tên"
 
     productMap[name] =
       (productMap[name] || 0) + Number(i.quantity * i.price)
@@ -146,7 +145,6 @@ export default function Dashboard() {
     labels: ["Doanh thu", "Chi phí", "Lợi nhuận"],
     datasets: [
       {
-        label: "VNĐ",
         data: [revenue, cost, profit],
         backgroundColor: ["#4caf50", "#f44336", "#2196f3"]
       }
@@ -156,7 +154,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <div className="topbar">
-        <h2>📊 Tổng quan</h2>
+        <h2>Tổng quan</h2>
         <NotificationBell />
       </div>
 
@@ -169,22 +167,22 @@ export default function Dashboard() {
       {/* KPI */}
       <div className="cards">
         <div className="card green">
-          <h4>💰 Doanh thu</h4>
+          <h4>Doanh thu</h4>
           <p>{revenue.toLocaleString()} đ</p>
         </div>
 
         <div className="card red">
-          <h4>💸 Chi phí</h4>
+          <h4>Chi phí</h4>
           <p>{cost.toLocaleString()} đ</p>
         </div>
 
         <div className="card blue">
-          <h4>📉 Lợi nhuận</h4>
+          <h4>Lợi nhuận</h4>
           <p>{profit.toLocaleString()} đ</p>
         </div>
 
         <div className="card">
-          <h4>📦 Tồn kho</h4>
+          <h4>Tồn kho</h4>
           <p>{stock}</p>
         </div>
       </div>
@@ -192,17 +190,17 @@ export default function Dashboard() {
       {/* CHART */}
       <div className="charts-grid">
         <div className="chart-box big">
-          <h4>📈 Doanh thu theo ngày</h4>
+          <h4>Doanh thu theo ngày</h4>
           <Line data={lineData} />
         </div>
 
         <div className="chart-box">
-          <h4>📊 Tài chính</h4>
+          <h4>Tài chính</h4>
           <Bar data={barData} />
         </div>
 
         <div className="chart-box">
-          <h4>🔥 Top sản phẩm</h4>
+          <h4>Top sản phẩm</h4>
           <Pie data={pieData} />
         </div>
       </div>

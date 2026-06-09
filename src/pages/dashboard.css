@@ -1,54 +1,90 @@
 .dashboard {
   padding: 20px;
+  background: #f5f7fb;
+  min-height: 100vh;
 }
 
+/* ===== TOP ===== */
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 10px;
 }
 
+/* ===== FILTER ===== */
 .filter {
-  margin: 10px 0;
   display: flex;
   gap: 10px;
-}
-
-.cards {
-  display: flex;
-  gap: 15px;
   margin: 15px 0;
 }
 
-.card {
-  flex: 1;
-  background: white;
-  padding: 15px;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+/* ===== KPI GRID (QUAN TRỌNG) ===== */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
 }
 
-.green { border-left: 5px solid #4caf50; }
-.red { border-left: 5px solid #f44336; }
-.blue { border-left: 5px solid #2196f3; }
+/* CARD */
+.card {
+  background: #fff;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.05);
 
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.card h4 {
+  font-size: 14px;
+  color: #888;
+}
+
+.card p {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* COLORS */
+.green { border-left: 4px solid #4caf50; }
+.red { border-left: 4px solid #f44336; }
+.blue { border-left: 4px solid #2196f3; }
+
+/* ===== CHART GRID ===== */
 .charts-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 20px;
+  gap: 15px;
 }
 
+/* CHART BOX */
 .chart-box {
-  background: white;
-  padding: 20px;
+  background: #fff;
+  padding: 15px;
   border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.05);
 }
 
+.chart-box h4 {
+  margin-bottom: 10px;
+}
+
+/* LINE CHART FULL WIDTH */
 .chart-box.big {
   grid-column: span 2;
 }
 
-#root .dashboard{
-  margin: 30px;
+/* ===== RESPONSIVE (QUAN TRỌNG) ===== */
+@media (max-width: 900px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-box.big {
+    grid-column: span 1;
+  }
 }

@@ -652,3 +652,136 @@ th, td {
   text-align: center;
   padding: 20px;
 }
+
+/* login */
+/* BACKGROUND */
+.login-wrapper {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background: linear-gradient(135deg, #2f3e9e, #6a82fb);
+}
+
+/* CARD */
+.login-card {
+  width: 350px;
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* TITLE */
+.login-card h2 {
+  text-align: center;
+  margin-bottom: 10px;
+  color: #2f3e9e;
+}
+
+/* INPUT */
+.login-card input {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  outline: none;
+  transition: 0.2s;
+}
+
+.login-card input:focus {
+  border-color: #2f3e9e;
+  box-shadow: 0 0 0 2px rgba(47, 62, 158, 0.2);
+}
+
+/* BUTTON */
+.login-card button {
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: #2f3e9e;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+.login-card button:hover {
+  background: #1f2c7a;
+}
+
+/* FOOTER */
+.login-footer {
+  text-align: center;
+  font-size: 12px;
+  color: #999;
+}
+
+
+/* sua code dashboard */
+
+
+.sidebar {
+  width: 240px;
+  height: 100vh;
+  background: linear-gradient(180deg, #1e2a78, #2f49c0);
+  color: white;
+  padding: 15px;
+}
+
+.menu-item {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  position: relative; /* 🔥 QUAN TRỌNG */
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* DROPDOWN */
+.dropdown-menu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+
+  background: #2f3e9e;
+  padding: 15px;
+  border-radius: 10px;
+
+  z-index: 999;
+}
+
+.dropdown-menu.small {
+  width: 180px;
+}
+
+.dropdown-menu.big {
+  display: flex;
+  gap: 30px;
+  min-width: 500px;
+}
+
+/* COLUMN */
+.column h4 {
+  font-size: 13px;
+  margin-bottom: 10px;
+  opacity: 0.7;
+}
+
+.column div {
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.column div:hover {
+  transform: translateX(4px);
+  opacity: 0.8;
+}

@@ -1,6 +1,10 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "./services/supabaseClient";
 
+import Login from "./pages/Login";
 import Sidebar from "./components/Sidebar";
+import Header from "./components/Header";
 
 // CORE
 import Dashboard from "./pages/Dashboard";
@@ -21,7 +25,7 @@ import Debts from "./pages/Debts";
 
 // INVENTORY
 import Inventory from "./pages/Inventory";
-import Products from "./pages/Products"; // 🔥 thêm cái này
+import Products from "./pages/Products";
 
 // CATEGORY
 import ProductGroups from "./pages/ProductGroups";
@@ -41,15 +45,62 @@ import Shifts from "./pages/Shifts";
 import Channels from "./pages/Channels";
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user || null);
+      setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user || null);
+      }
+    );
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+
   return (
     <BrowserRouter>
-      <div style={{ display: "flex" }}>
-        <Sidebar />
+      <Routes>
+        {/* LOGIN */}
+        <Route
+          path="/login"
+          element={!user ? <Login /> : <Navigate to="/" />}
+        />
 
-        <div style={{ flex: 1, padding: 20 }}>
+        {/* PRIVATE */}
+        <Route
+          path="/*"
+          element={
+            user ? <Layout user={user} /> : <Navigate to="/login" />
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+
+
+
+// 🔥 LAYOUT
+function Layout({ user }) {
+  return (
+    <div style={{ display: "flex" }}>
+      <Sidebar />
+
+      <div style={{ flex: 1 }}>
+        <Header user={user} />
+
+        <div style={{ padding: 20 }}>
           <Routes>
-
-            {/* DASHBOARD */}
             <Route path="/" element={<Dashboard />} />
 
             {/* SALES */}
@@ -62,7 +113,7 @@ function App() {
 
             {/* INVENTORY */}
             <Route path="/inventory" element={<Inventory />} />
-            <Route path="/products" element={<Products />} /> {/* 🔥 QUAN TRỌNG */}
+            <Route path="/products" element={<Products />} />
 
             {/* FINANCE */}
             <Route path="/cash" element={<Cashbook />} />
@@ -88,13 +139,10 @@ function App() {
             <Route path="/channels" element={<Channels />} />
 
             {/* 404 */}
-            <Route path="*" element={<div>❌ Không tìm thấy trang</div>} />
-
+            <Route path="*" element={<div>❌ Không tìm thấy</div>} />
           </Routes>
         </div>
       </div>
-    </BrowserRouter>
+    </div>
   );
 }
-
-export default App;
