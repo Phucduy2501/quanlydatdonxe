@@ -1,6 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { supabase } from "./services/supabaseClient";
 
 import Login from "./pages/Login";
 import Sidebar from "./components/Sidebar";
@@ -44,26 +42,25 @@ import Shifts from "./pages/Shifts";
 // CHANNEL
 import Channels from "./pages/Channels";
 
+function getUserFromLocalStorage() {
+  const token = localStorage.getItem("token");
+  const user = localStorage.getItem("user");
+
+  if (!token || !user) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(user);
+  } catch (error) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    return null;
+  }
+}
+
 function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user || null);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user || null);
-      }
-    );
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
+  const user = getUserFromLocalStorage();
 
   return (
     <BrowserRouter>
@@ -71,14 +68,14 @@ function App() {
         {/* LOGIN */}
         <Route
           path="/login"
-          element={!user ? <Login /> : <Navigate to="/" />}
+          element={!user ? <Login /> : <Navigate to="/" replace />}
         />
 
         {/* PRIVATE */}
         <Route
           path="/*"
           element={
-            user ? <Layout user={user} /> : <Navigate to="/login" />
+            user ? <Layout user={user} /> : <Navigate to="/login" replace />
           }
         />
       </Routes>
@@ -88,9 +85,7 @@ function App() {
 
 export default App;
 
-
-
-// 🔥 LAYOUT
+// LAYOUT
 function Layout({ user }) {
   return (
     <div style={{ display: "flex" }}>

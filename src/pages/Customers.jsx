@@ -1,278 +1,345 @@
-import { useEffect, useState } from "react"
-import { supabase } from "../services/supabaseClient"
-import * as XLSX from "xlsx"
+import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
+import { apiGet, apiCreate, apiUpdate, apiDelete } from "../services/api";
 
 export default function Customers() {
-  const [customers, setCustomers] = useState([])
-  const [excelData, setExcelData] = useState([])
-  const [preview, setPreview] = useState([])
-  const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [customers, setCustomers] = useState([]);
+  const [excelData, setExcelData] = useState([]);
+  const [preview, setPreview] = useState([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [showAdd, setShowAdd] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [newCus, setNewCus] = useState({
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  const emptyCustomer = {
     code: "",
     name: "",
     phone: "",
+    email: "",
     address: "",
     province: "",
     district: "",
-    ward: ""
-  })
+    ward: "",
+    birthday: "",
+  };
+
+  const [newCus, setNewCus] = useState(emptyCustomer);
 
   const inputStyle = {
-  width: "100%",
-  padding: 8,
-  border: "1px solid #ddd",
-  borderRadius: 6,
-  marginBottom: 10
-}
+    width: "100%",
+    padding: 8,
+    border: "1px solid #ddd",
+    borderRadius: 6,
+    marginBottom: 10,
+  };
 
-const btnSave = {
-  background: "#2ecc71",
-  color: "white",
-  border: "none",
-  padding: "8px 14px",
-  borderRadius: 6,
-  cursor: "pointer"
-}
+  const btnSave = {
+    background: "#2ecc71",
+    color: "white",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: 6,
+    cursor: "pointer",
+  };
 
-const btnCancel = {
-  background: "#e74c3c",
-  color: "white",
-  border: "none",
-  padding: "8px 14px",
-  borderRadius: 6,
-  cursor: "pointer"
-}
+  const btnCancel = {
+    background: "#e74c3c",
+    color: "white",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: 6,
+    cursor: "pointer",
+  };
 
-  // ================= LOAD =================
+  // ================= LOAD DATA TỪ BACKEND =================
   useEffect(() => {
-    fetchCustomers()
-  }, [])
-
-
-
+    fetchCustomers();
+  }, []);
 
   const fetchCustomers = async () => {
-    const { data } = await supabase
-      .from("customers")
-      .select("*")
-      .order("created_at", { ascending: false })
+    try {
+      const data = await apiGet("customers");
 
-    setCustomers(data || [])
-  }
+      if (Array.isArray(data)) {
+        const sorted = [...data].sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        });
 
-  // ================= NORMALIZE =================
+        setCustomers(sorted);
+      } else {
+        setCustomers([]);
+      }
+    } catch (error) {
+      console.log("Lỗi tải khách hàng:", error);
+      setCustomers([]);
+    }
+  };
+
+  // ================= NORMALIZE EXCEL HEADER =================
   const normalize = (str) =>
     str
-      ?.toLowerCase()
+      ?.toString()
+      .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "")
+      .replace(/[^a-z0-9]/g, "");
 
   const get = (row, keywords = []) => {
-    const keys = Object.keys(row)
+    const keys = Object.keys(row);
 
     for (let k of keys) {
-      const nk = normalize(k)
+      const nk = normalize(k);
 
       for (let kw of keywords) {
-        const nkw = normalize(kw)
+        const nkw = normalize(kw);
 
         if (
           nk.includes(nkw) ||
           nkw.includes(nk) ||
           (nk.includes("sdt") && nkw.includes("dien"))
         ) {
-          return row[k]
+          return row[k];
         }
       }
     }
-    return ""
-  }
+
+    return "";
+  };
 
   // ================= DATE =================
   const formatDate = (v) => {
-    if (!v) return null
+    if (!v) return "";
 
     if (typeof v === "string" && v.includes("/")) {
-      let [m, d, y] = v.split("/")
-      if (y.length === 2) y = "19" + y
-      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
+      let [m, d, y] = v.split("/");
+
+      if (!m || !d || !y) return "";
+
+      if (y.length === 2) y = "20" + y;
+
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
     }
 
-    const d = new Date(v)
-    if (isNaN(d)) return null
-    return d.toISOString().split("T")[0]
-  }
+    const d = new Date(v);
 
-  // ================= IMPORT =================
+    if (isNaN(d)) return "";
+
+    return d.toISOString().split("T")[0];
+  };
+
+  // ================= IMPORT EXCEL =================
   const handleFile = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
+    const file = e.target.files[0];
 
-    const reader = new FileReader()
+    if (!file) return;
+
+    const reader = new FileReader();
 
     reader.onload = (evt) => {
-      const data = new Uint8Array(evt.target.result)
-      const wb = XLSX.read(data, { type: "array" })
-      const sheet = wb.Sheets[wb.SheetNames[0]]
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
 
       const json = XLSX.utils.sheet_to_json(sheet, {
         defval: "",
         raw: false,
         range: 3,
-      })
+      });
 
       const mapped = json.map((row, i) => ({
         index: i + 1,
-        code: get(row, ["ma khach"]),
-        name: get(row, ["ten khach"]),
-        phone: get(row, ["dien thoai", "sdt", "tel"]),
+        code: get(row, ["ma khach", "ma khach hang", "ma kh"]),
+        name: get(row, ["ten khach", "ten khach hang", "khach hang"]),
+        phone: get(row, ["dien thoai", "sdt", "tel", "phone"]),
         email: get(row, ["email"]),
-        address: get(row, ["dia chi"]),
-        province: get(row, ["tinh"]),
-        district: get(row, ["quan"]),
-        ward: get(row, ["phuong"]),
-        birthday: get(row, ["ngay sinh"]),
+        address: get(row, ["dia chi", "address"]),
+        province: get(row, ["tinh", "thanh pho"]),
+        district: get(row, ["quan", "huyen"]),
+        ward: get(row, ["phuong", "xa"]),
+        birthday: get(row, ["ngay sinh", "birthday"]),
         raw: row,
-      }))
+      }));
 
-      setExcelData(mapped)
-      setPreview(mapped)
-    }
+      setExcelData(mapped);
+      setPreview(mapped);
+    };
 
-    reader.readAsArrayBuffer(file)
-  }
+    reader.readAsArrayBuffer(file);
+  };
 
-  // ================= SAVE =================
+  // ================= SAVE EXCEL VÀO BACKEND =================
   const handleSave = async () => {
-    if (!excelData.length) return alert("Không có dữ liệu")
-
-    setLoading(true)
-
-    const clean = excelData.map((v) => ({
-      id: crypto.randomUUID(),
-      code: v.code || "",
-      name: v.name || "",
-      phone: v.phone || "",
-      email: v.email || "",
-      address: v.address || "",
-      province: v.province || "",
-      district: v.district || "",
-      ward: v.ward || "",
-      birthday: formatDate(v.birthday) || null,
-    }))
-
-    const { error } = await supabase.from("customers").insert(clean)
-
-    if (error) {
-      console.log(error)
-      alert("❌ Lỗi insert")
-    } else {
-      alert("✅ Lưu thành công")
-      await fetchCustomers()
+    if (!excelData.length) {
+      alert("Không có dữ liệu Excel để lưu");
+      return;
     }
 
-    setLoading(false)
-  }
+    setLoading(true);
+
+    try {
+      const clean = excelData.map((v) => ({
+        code: v.code || "KH" + Date.now() + Math.floor(Math.random() * 1000),
+        name: v.name || "",
+        phone: v.phone || "",
+        email: v.email || "",
+        address: v.address || "",
+        province: v.province || "",
+        district: v.district || "",
+        ward: v.ward || "",
+        birthday: formatDate(v.birthday),
+      }));
+
+      for (const item of clean) {
+        await apiCreate("customers", item);
+      }
+
+      alert("✅ Lưu dữ liệu Excel thành công");
+
+      setExcelData([]);
+      setPreview([]);
+
+      await fetchCustomers();
+    } catch (error) {
+      console.log("Lỗi lưu Excel:", error);
+      alert("❌ Lỗi lưu dữ liệu Excel");
+    }
+
+    setLoading(false);
+  };
 
   // ================= ADD =================
   const handleAdd = async () => {
-    if (!newCus.name) return alert("Thiếu tên")
-    if (!newCus.phone) return alert("Thiếu SĐT")
-
-    const { error } = await supabase.from("customers").insert([
-      {
-        name: newCus.name,
-        phone: newCus.phone,
-        address: newCus.address
-      }
-    ])
-
-    if (error) {
-      alert("Lỗi insert")
-      console.log(error)
-      return
+    if (!newCus.name) {
+      alert("Thiếu tên khách hàng");
+      return;
     }
 
-    alert("Thêm thành công")
+    if (!newCus.phone) {
+      alert("Thiếu SĐT");
+      return;
+    }
 
-    setShowAdd(false)
-    setNewCus({ name: "", phone: "", address: "" })
+    try {
+      await apiCreate("customers", {
+        code: newCus.code || "KH" + Date.now(),
+        name: newCus.name,
+        phone: newCus.phone,
+        email: newCus.email || "",
+        address: newCus.address || "",
+        province: newCus.province || "",
+        district: newCus.district || "",
+        ward: newCus.ward || "",
+        birthday: newCus.birthday || "",
+      });
 
-    fetchCustomers() // reload lại list
-  }
+      alert("✅ Thêm khách hàng thành công");
 
+      setShowAdd(false);
+      setNewCus(emptyCustomer);
 
+      fetchCustomers();
+    } catch (error) {
+      console.log("Lỗi thêm khách hàng:", error);
+      alert("❌ Lỗi thêm khách hàng");
+    }
+  };
+
+  // ================= DELETE =================
   const handleDelete = async (id) => {
-  if (!confirm("Xoá khách này?")) return
+    if (!window.confirm("Xoá khách hàng này?")) return;
 
-  const { error } = await supabase
-    .from("customers")
-    .delete()
-    .eq("id", id)
+    try {
+      await apiDelete("customers", id);
+      fetchCustomers();
+    } catch (error) {
+      console.log("Lỗi xoá khách hàng:", error);
+      alert("❌ Lỗi xoá khách hàng");
+    }
+  };
 
-  if (error) {
-    alert("❌ Lỗi xoá")
-    console.log(error)
-    return
-  }
-
-  fetchCustomers()
-}
-
-
-
+  // ================= UPDATE =================
   const handleUpdate = async () => {
-  const { error } = await supabase
-    .from("customers")
-    .update({
-      name: editing.name,
-      phone: editing.phone,
-      address: editing.address,
-      province: editing.province,
-      district: editing.district,
-      ward: editing.ward
-    })
-    .eq("id", editing.id)
+    if (!editing?.name) {
+      alert("Thiếu tên khách hàng");
+      return;
+    }
 
-  if (error) {
-    alert("❌ Lỗi update")
-    console.log(error)
-    return
-  }
+    if (!editing?.phone) {
+      alert("Thiếu SĐT");
+      return;
+    }
 
-  alert("✅ Cập nhật thành công")
-  setEditing(null)
-  fetchCustomers()
-}
+    try {
+      await apiUpdate("customers", editing.id, {
+        code: editing.code || "",
+        name: editing.name || "",
+        phone: editing.phone || "",
+        email: editing.email || "",
+        address: editing.address || "",
+        province: editing.province || "",
+        district: editing.district || "",
+        ward: editing.ward || "",
+        birthday: editing.birthday || "",
+      });
+
+      alert("✅ Cập nhật thành công");
+
+      setEditing(null);
+      fetchCustomers();
+    } catch (error) {
+      console.log("Lỗi cập nhật khách hàng:", error);
+      alert("❌ Lỗi cập nhật khách hàng");
+    }
+  };
 
   // ================= SEARCH =================
-  const filtered = customers.filter((c) =>
-    c.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = customers.filter((c) => {
+    const text = `${c.code || ""} ${c.name || ""} ${c.phone || ""} ${
+      c.address || ""
+    }`.toLowerCase();
 
-  // ================= EXPORT =================
+    return text.includes(search.toLowerCase());
+  });
+
+  // ================= EXPORT EXCEL =================
   const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(customers)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Customers")
-    XLSX.writeFile(wb, "customers.xlsx")
-  }
+    const dataExport = customers.map((c) => ({
+      "Mã khách": c.code || "",
+      "Tên khách": c.name || "",
+      "SĐT": c.phone || "",
+      Email: c.email || "",
+      "Địa chỉ": c.address || "",
+      Tỉnh: c.province || "",
+      Quận: c.district || "",
+      Phường: c.ward || "",
+      "Ngày sinh": c.birthday || "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataExport);
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(wb, ws, "Customers");
+    XLSX.writeFile(wb, "customers.xlsx");
+  };
 
   return (
     <div className="misa-container">
       <h2>👤 Quản lý khách hàng</h2>
 
       <div className="toolbar">
-        <input placeholder="🔍 Tìm..." onChange={(e) => setSearch(e.target.value)} />
-        <input type="file" onChange={handleFile} />
+        <input
+          placeholder="🔍 Tìm..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <input type="file" accept=".xlsx,.xls" onChange={handleFile} />
 
         <button onClick={handleSave} disabled={loading}>
-          💾 Lưu
+          {loading ? "Đang lưu..." : "💾 Lưu"}
         </button>
 
         <button onClick={exportExcel}>📤 Xuất</button>
@@ -280,10 +347,11 @@ const btnCancel = {
         <button onClick={() => setShowAdd(true)}>➕ Thêm</button>
       </div>
 
-      {/* PREVIEW */}
+      {/* PREVIEW EXCEL */}
       {preview.length > 0 && (
         <div>
           <h4>Preview ({preview.length})</h4>
+
           <table>
             <thead>
               <tr>
@@ -292,6 +360,7 @@ const btnCancel = {
                 ))}
               </tr>
             </thead>
+
             <tbody>
               {preview.map((r, i) => (
                 <tr key={i}>
@@ -319,6 +388,7 @@ const btnCancel = {
             <th>Hành động</th>
           </tr>
         </thead>
+
         <tbody>
           {filtered.map((c) => (
             <tr key={c.id}>
@@ -335,9 +405,18 @@ const btnCancel = {
               </td>
             </tr>
           ))}
+
+          {filtered.length === 0 && (
+            <tr>
+              <td colSpan="8" style={{ textAlign: "center", padding: 20 }}>
+                Chưa có dữ liệu khách hàng
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 
+      {/* MODAL ADD */}
       {showAdd && (
         <div
           style={{
@@ -347,54 +426,51 @@ const btnCancel = {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 9999
+            zIndex: 9999,
           }}
-          onClick={() => setShowAdd(false)} // click ngoài để đóng
+          onClick={() => setShowAdd(false)}
         >
           <div
-            onClick={(e) => e.stopPropagation()} // chặn click xuyên
+            onClick={(e) => e.stopPropagation()}
             style={{
               background: "white",
               padding: 24,
               borderRadius: 12,
               width: 420,
-              boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+              boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
             }}
           >
             <h3 style={{ marginBottom: 15 }}>➕ Thêm khách hàng</h3>
 
-            {/* MÃ */}
             <input
               placeholder="Mã khách"
               value={newCus.code}
-              onChange={(e) =>
-                setNewCus({ ...newCus, code: e.target.value })
-              }
+              onChange={(e) => setNewCus({ ...newCus, code: e.target.value })}
               style={inputStyle}
             />
 
-            {/* TÊN */}
             <input
               placeholder="Tên khách *"
               value={newCus.name}
               autoFocus
-              onChange={(e) =>
-                setNewCus({ ...newCus, name: e.target.value })
-              }
+              onChange={(e) => setNewCus({ ...newCus, name: e.target.value })}
               style={inputStyle}
             />
 
-            {/* SĐT */}
             <input
               placeholder="SĐT *"
               value={newCus.phone}
-              onChange={(e) =>
-                setNewCus({ ...newCus, phone: e.target.value })
-              }
+              onChange={(e) => setNewCus({ ...newCus, phone: e.target.value })}
               style={inputStyle}
             />
 
-            {/* ĐỊA CHỈ */}
+            <input
+              placeholder="Email"
+              value={newCus.email}
+              onChange={(e) => setNewCus({ ...newCus, email: e.target.value })}
+              style={inputStyle}
+            />
+
             <input
               placeholder="Địa chỉ"
               value={newCus.address}
@@ -404,7 +480,6 @@ const btnCancel = {
               style={inputStyle}
             />
 
-            {/* TỈNH */}
             <input
               placeholder="Tỉnh"
               value={newCus.province}
@@ -414,7 +489,6 @@ const btnCancel = {
               style={inputStyle}
             />
 
-            {/* QUẬN */}
             <input
               placeholder="Quận"
               value={newCus.district}
@@ -424,33 +498,26 @@ const btnCancel = {
               style={inputStyle}
             />
 
-            {/* PHƯỜNG */}
             <input
               placeholder="Phường"
               value={newCus.ward}
-              onChange={(e) =>
-                setNewCus({ ...newCus, ward: e.target.value })
-              }
+              onChange={(e) => setNewCus({ ...newCus, ward: e.target.value })}
               style={inputStyle}
             />
 
-            {/* BUTTON */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: 10,
-                marginTop: 15
+                marginTop: 15,
               }}
             >
               <button style={btnSave} onClick={handleAdd}>
                 💾 Lưu
               </button>
 
-              <button
-                style={btnCancel}
-                onClick={() => setShowAdd(false)}
-              >
+              <button style={btnCancel} onClick={() => setShowAdd(false)}>
                 ❌ Huỷ
               </button>
             </div>
@@ -458,6 +525,7 @@ const btnCancel = {
         </div>
       )}
 
+      {/* MODAL EDIT */}
       {editing && (
         <div
           style={{
@@ -467,7 +535,7 @@ const btnCancel = {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 9999
+            zIndex: 9999,
           }}
           onClick={() => setEditing(null)}
         >
@@ -477,13 +545,23 @@ const btnCancel = {
               background: "white",
               padding: 24,
               borderRadius: 12,
-              width: 420
+              width: 420,
             }}
           >
             <h3>✏️ Sửa khách hàng</h3>
 
             <input
-              value={editing.name}
+              placeholder="Mã khách"
+              value={editing.code || ""}
+              onChange={(e) =>
+                setEditing({ ...editing, code: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Tên khách"
+              value={editing.name || ""}
               onChange={(e) =>
                 setEditing({ ...editing, name: e.target.value })
               }
@@ -491,7 +569,8 @@ const btnCancel = {
             />
 
             <input
-              value={editing.phone}
+              placeholder="SĐT"
+              value={editing.phone || ""}
               onChange={(e) =>
                 setEditing({ ...editing, phone: e.target.value })
               }
@@ -499,7 +578,17 @@ const btnCancel = {
             />
 
             <input
-              value={editing.address}
+              placeholder="Email"
+              value={editing.email || ""}
+              onChange={(e) =>
+                setEditing({ ...editing, email: e.target.value })
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Địa chỉ"
+              value={editing.address || ""}
               onChange={(e) =>
                 setEditing({ ...editing, address: e.target.value })
               }
@@ -507,7 +596,8 @@ const btnCancel = {
             />
 
             <input
-              value={editing.province}
+              placeholder="Tỉnh"
+              value={editing.province || ""}
               onChange={(e) =>
                 setEditing({ ...editing, province: e.target.value })
               }
@@ -515,7 +605,8 @@ const btnCancel = {
             />
 
             <input
-              value={editing.district}
+              placeholder="Quận"
+              value={editing.district || ""}
               onChange={(e) =>
                 setEditing({ ...editing, district: e.target.value })
               }
@@ -523,7 +614,8 @@ const btnCancel = {
             />
 
             <input
-              value={editing.ward}
+              placeholder="Phường"
+              value={editing.ward || ""}
               onChange={(e) =>
                 setEditing({ ...editing, ward: e.target.value })
               }
@@ -543,5 +635,5 @@ const btnCancel = {
         </div>
       )}
     </div>
-  )
+  );
 }

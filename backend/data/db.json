@@ -1,0 +1,102 @@
+{
+  "sales": [
+  {
+        "id": 1760000000000,
+        "date": "2026-04-10",
+        "total": 21092720,
+        "goods": 21012720,
+        "fee": 80000,
+        "discount": 0,
+        "cash": 10000000,
+        "bank": 11092720,
+        "createdAt": "..."
+    }
+    ],
+  "orders": [
+    {
+      "id": 1,
+      "date": "2026-04-10",
+      "total": 21092720,
+      "createdAt": "2026-04-10T08:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "date": "2026-04-11",
+      "total": 21183455,
+      "createdAt": "2026-04-11T08:00:00.000Z"
+    }
+  ],
+  "orderItems": [
+    {
+      "id": 1,
+      "orderId": 1,
+      "productId": 1,
+      "quantity": 5,
+      "price": 99000,
+      "createdAt": "2026-04-10T08:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "orderId": 2,
+      "productId": 2,
+      "quantity": 3,
+      "price": 129000,
+      "createdAt": "2026-04-11T08:00:00.000Z"
+    }
+  ],
+  "purchases": [],
+  "inventory": [],
+  "products": [
+    {
+      "id": 1,
+      "name": "Dép sục nam EVA",
+      "stock": 100,
+      "price": 99000
+    },
+    {
+      "id": 2,
+      "name": "Dép sục nữ EVA",
+      "stock": 80,
+      "price": 129000
+    }
+  ],
+  "customers": [
+    {
+      "id": 1782548892810,
+      "code": "111",
+      "name": "Duy",
+      "phone": "0896234032",
+      "email": "Phucduy2501@gmail.com",
+      "address": "Huế",
+      "province": "Huế",
+      "district": "Phong dinh",
+      "ward": "",
+      "birthday": "",
+      "createdAt": "2026-06-27T08:28:12.810Z",
+      "updatedAt": "2026-06-27T08:28:12.810Z"
+    }
+  ],
+  "cashbook": [],
+  "expenses": [
+    {
+      "id": 1,
+      "name": "Chi phí quảng cáo",
+      "amount": 500000,
+      "createdAt": "2026-04-10T08:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Chi phí vận hành",
+      "amount": 300000,
+      "createdAt": "2026-04-11T08:00:00.000Z"
+    }
+  ],
+  "debts": [],
+  "profit": [],
+  "productGroups": [],
+  "units": [],
+  "priceList": [],
+  "staff": [],
+  "shifts": [],
+  "channels": []
+}

@@ -1,37 +1,55 @@
 import { useState } from "react";
-import { supabase } from "../services/supabaseClient";
-import { useNavigate } from "react-router-dom";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("admin@gmail.com");
+  const [password, setPassword] = useState("123456");
   const [loading, setLoading] = useState(false);
 
-  const navigate = useNavigate();
+  const handleLogin = async (e) => {
+    e.preventDefault();
 
-  const handleLogin = async () => {
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const res = await fetch("http://localhost:3000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-    setLoading(false);
+      const data = await res.json();
 
-    if (error) {
-      alert("Sai tài khoản hoặc mật khẩu!");
-    } else {
-      navigate("/");
+      console.log("Kết quả login:", data);
+
+      if (!res.ok) {
+        alert(data.message || "Sai tài khoản hoặc mật khẩu!");
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      setLoading(false);
+
+      // quan trọng
+      window.location.href = "/";
+    } catch (error) {
+      console.log("Lỗi login:", error);
+      alert("Không kết nối được backend!");
+      setLoading(false);
     }
   };
 
   return (
     <div className="login-wrapper">
-      <div className="login-card">
+      <form className="login-card" onSubmit={handleLogin}>
         <h2>🔐 Đăng nhập hệ thống</h2>
 
         <input
+          type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -44,14 +62,12 @@ export default function Login() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button onClick={handleLogin} disabled={loading}>
+        <button type="submit" disabled={loading}>
           {loading ? "Đang đăng nhập..." : "Đăng nhập"}
         </button>
 
-        <p className="login-footer">
-          © 2026 MISAeShop
-        </p>
-      </div>
+        <p className="login-footer">© 2026 MISAeShop</p>
+      </form>
     </div>
   );
 }

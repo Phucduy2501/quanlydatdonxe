@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../services/supabaseClient";
+import { apiGet, apiCreate, apiDelete } from "../services/api";
 
 export default function Cashbook() {
   const [data, setData] = useState([]);
@@ -18,47 +18,79 @@ export default function Cashbook() {
   }, []);
 
   const load = async () => {
-    const { data } = await supabase
-      .from("cashbook")
-      .select("*")
-      .order("created_at", { ascending: false });
+    try {
+      const cashbookData = await apiGet("cashbook");
+      const ordersData = await apiGet("orders");
+      const expensesData = await apiGet("expenses");
 
-    const { data: o } = await supabase.from("orders").select("*");
-    const { data: e } = await supabase.from("expenses").select("*");
+      const sortedCashbook = Array.isArray(cashbookData)
+        ? [...cashbookData].sort((a, b) => {
+            const dateA = new Date(a.createdAt || a.created_at || 0);
+            const dateB = new Date(b.createdAt || b.created_at || 0);
+            return dateB - dateA;
+          })
+        : [];
 
-    setData(data || []);
-    setOrders(o || []);
-    setExpenses(e || []);
+      setData(sortedCashbook);
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
+      setExpenses(Array.isArray(expensesData) ? expensesData : []);
+    } catch (error) {
+      console.log("Lỗi tải dữ liệu quỹ tiền:", error);
+      setData([]);
+      setOrders([]);
+      setExpenses([]);
+    }
   };
 
   // ADD
   const add = async () => {
-    if (!amount) return;
+    if (!amount) {
+      alert("Vui lòng nhập số tiền");
+      return;
+    }
 
-    await supabase.from("cashbook").insert([
-      {
-        id: crypto.randomUUID(),
+    try {
+      await apiCreate("cashbook", {
         type: formType,
         amount: Number(amount),
         note,
-      },
-    ]);
+      });
 
-    setAmount("");
-    setNote("");
-    load();
+      setAmount("");
+      setNote("");
+
+      load();
+    } catch (error) {
+      console.log("Lỗi thêm quỹ tiền:", error);
+      alert("❌ Lỗi thêm dữ liệu");
+    }
   };
 
   // DELETE
   const remove = async (id) => {
-    await supabase.from("cashbook").delete().eq("id", id);
-    load();
+    if (!window.confirm("Bạn có chắc muốn xoá dòng này?")) return;
+
+    try {
+      await apiDelete("cashbook", id);
+      load();
+    } catch (error) {
+      console.log("Lỗi xoá quỹ tiền:", error);
+      alert("❌ Lỗi xoá dữ liệu");
+    }
   };
 
   // FILTER DATE
   const filterByDate = (d) => {
     if (!filterDate) return true;
-    return new Date(d.created_at).toDateString() === new Date(filterDate).toDateString();
+
+    const dateValue = d.createdAt || d.created_at || d.date;
+
+    if (!dateValue) return false;
+
+    return (
+      new Date(dateValue).toDateString() ===
+      new Date(filterDate).toDateString()
+    );
   };
 
   const filtered = data
@@ -68,16 +100,25 @@ export default function Cashbook() {
   // TOTAL
   const totalThu = filtered
     .filter((d) => d.type === "thu")
-    .reduce((s, i) => s + Number(i.amount), 0);
+    .reduce((s, i) => s + Number(i.amount || 0), 0);
 
   const totalChi = filtered
     .filter((d) => d.type === "chi")
-    .reduce((s, i) => s + Number(i.amount), 0);
+    .reduce((s, i) => s + Number(i.amount || 0), 0);
 
-  // PROFIT (orders - expenses)
+  // PROFIT
   const totalRevenue = orders.reduce((s, i) => s + Number(i.total || 0), 0);
   const totalExpense = expenses.reduce((s, i) => s + Number(i.amount || 0), 0);
   const profit = totalRevenue - totalExpense;
+
+  // FORMAT DATE
+  const showDate = (item) => {
+    const dateValue = item.createdAt || item.created_at || item.date;
+
+    if (!dateValue) return "";
+
+    return new Date(dateValue).toLocaleString("vi-VN");
+  };
 
   // EXPORT CSV
   const exportExcel = () => {
@@ -86,19 +127,24 @@ export default function Cashbook() {
       ...data.map((i) => [
         i.type,
         i.amount,
-        i.note,
-        new Date(i.created_at).toLocaleString(),
+        i.note || "",
+        showDate(i),
       ]),
     ];
 
     const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = url;
     a.download = "quy_tien.csv";
     a.click();
+
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -107,7 +153,8 @@ export default function Cashbook() {
 
       {/* SUMMARY */}
       <div style={{ marginBottom: 15 }}>
-        <b style={{ color: "green" }}>Thu: {totalThu.toLocaleString()} đ</b> |{" "}
+        <b style={{ color: "green" }}>Thu: {totalThu.toLocaleString()} đ</b>{" "}
+        |{" "}
         <b style={{ color: "red" }}>Chi: {totalChi.toLocaleString()} đ</b>
       </div>
 
@@ -141,9 +188,13 @@ export default function Cashbook() {
 
         <button onClick={add}>+ Thêm</button>
 
-        <input type="date" onChange={(e) => setFilterDate(e.target.value)} />
+        <input
+          type="date"
+          value={filterDate}
+          onChange={(e) => setFilterDate(e.target.value)}
+        />
 
-        <select onChange={(e) => setType(e.target.value)}>
+        <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="all">Tất cả</option>
           <option value="thu">Thu</option>
           <option value="chi">Chi</option>
@@ -151,9 +202,6 @@ export default function Cashbook() {
 
         <button onClick={exportExcel}>Export Excel</button>
       </div>
-
-      {/* 📊 CHART */}
-      
 
       {/* TABLE */}
       <table>
@@ -172,17 +220,30 @@ export default function Cashbook() {
           {filtered.map((d, index) => (
             <tr key={d.id}>
               <td>{index + 1}</td>
+
               <td style={{ color: d.type === "thu" ? "green" : "red" }}>
-                {d.type}
+                {d.type === "thu" ? "Thu" : "Chi"}
               </td>
-              <td>{Number(d.amount).toLocaleString()}</td>
+
+              <td>{Number(d.amount || 0).toLocaleString()} đ</td>
+
               <td>{d.note}</td>
-              <td>{new Date(d.created_at).toLocaleString()}</td>
+
+              <td>{showDate(d)}</td>
+
               <td>
                 <button onClick={() => remove(d.id)}>X</button>
               </td>
             </tr>
           ))}
+
+          {filtered.length === 0 && (
+            <tr>
+              <td colSpan="6" style={{ textAlign: "center", padding: 20 }}>
+                Chưa có dữ liệu quỹ tiền
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

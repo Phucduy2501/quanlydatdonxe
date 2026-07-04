@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    container_name: product-manager-backend
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      JWT_SECRET: my_secret_key
+      DATABASE_URL: postgres://postgres:123456@db:5432/product_manager
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:16
+    container_name: product-manager-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: product_manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+volumes:
+  postgres_data:
