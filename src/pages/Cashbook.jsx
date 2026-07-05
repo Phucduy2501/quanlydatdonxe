@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiCreate, apiDelete } from "../services/api";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 export default function Cashbook() {
   const [data, setData] = useState([]);
@@ -12,10 +14,18 @@ export default function Cashbook() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [formType, setFormType] = useState("thu");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     load();
   }, []);
+
+  const toArray = (res) => {
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.data)) return res.data;
+    return [];
+  };
 
   const load = async () => {
     try {
@@ -23,17 +33,15 @@ export default function Cashbook() {
       const ordersData = await apiGet("orders");
       const expensesData = await apiGet("expenses");
 
-      const sortedCashbook = Array.isArray(cashbookData)
-        ? [...cashbookData].sort((a, b) => {
-            const dateA = new Date(a.createdAt || a.created_at || 0);
-            const dateB = new Date(b.createdAt || b.created_at || 0);
-            return dateB - dateA;
-          })
-        : [];
+      const sortedCashbook = toArray(cashbookData).sort((a, b) => {
+        const dateA = new Date(a.created_at || a.createdAt || 0);
+        const dateB = new Date(b.created_at || b.createdAt || 0);
+        return dateB - dateA;
+      });
 
       setData(sortedCashbook);
-      setOrders(Array.isArray(ordersData) ? ordersData : []);
-      setExpenses(Array.isArray(expensesData) ? expensesData : []);
+      setOrders(toArray(ordersData));
+      setExpenses(toArray(expensesData));
     } catch (error) {
       console.log("Lỗi tải dữ liệu quỹ tiền:", error);
       setData([]);
@@ -42,49 +50,18 @@ export default function Cashbook() {
     }
   };
 
-  // ADD
-  const add = async () => {
-    if (!amount) {
-      alert("Vui lòng nhập số tiền");
-      return;
-    }
+  const money = (n) => Number(n || 0).toLocaleString("vi-VN") + " đ";
 
-    try {
-      await apiCreate("cashbook", {
-        type: formType,
-        amount: Number(amount),
-        note,
-      });
-
-      setAmount("");
-      setNote("");
-
-      load();
-    } catch (error) {
-      console.log("Lỗi thêm quỹ tiền:", error);
-      alert("❌ Lỗi thêm dữ liệu");
-    }
+  const showDate = (item) => {
+    const dateValue = item.created_at || item.createdAt || item.date;
+    if (!dateValue) return "—";
+    return new Date(dateValue).toLocaleString("vi-VN");
   };
 
-  // DELETE
-  const remove = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xoá dòng này?")) return;
-
-    try {
-      await apiDelete("cashbook", id);
-      load();
-    } catch (error) {
-      console.log("Lỗi xoá quỹ tiền:", error);
-      alert("❌ Lỗi xoá dữ liệu");
-    }
-  };
-
-  // FILTER DATE
-  const filterByDate = (d) => {
+  const filterByDate = (item) => {
     if (!filterDate) return true;
 
-    const dateValue = d.createdAt || d.created_at || d.date;
-
+    const dateValue = item.created_at || item.createdAt || item.date;
     if (!dateValue) return false;
 
     return (
@@ -94,158 +71,476 @@ export default function Cashbook() {
   };
 
   const filtered = data
-    .filter((d) => (type === "all" ? true : d.type === type))
+    .filter((item) => (type === "all" ? true : item.type === type))
     .filter(filterByDate);
 
-  // TOTAL
   const totalThu = filtered
-    .filter((d) => d.type === "thu")
-    .reduce((s, i) => s + Number(i.amount || 0), 0);
+    .filter((item) => item.type === "thu")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   const totalChi = filtered
-    .filter((d) => d.type === "chi")
-    .reduce((s, i) => s + Number(i.amount || 0), 0);
+    .filter((item) => item.type === "chi")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-  // PROFIT
-  const totalRevenue = orders.reduce((s, i) => s + Number(i.total || 0), 0);
-  const totalExpense = expenses.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const balance = totalThu - totalChi;
+
+  const totalRevenue = orders.reduce(
+    (sum, item) => sum + Number(item.total || 0),
+    0
+  );
+
+  const totalExpense = expenses.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+
   const profit = totalRevenue - totalExpense;
 
-  // FORMAT DATE
-  const showDate = (item) => {
-    const dateValue = item.createdAt || item.created_at || item.date;
+  const add = async () => {
+    if (!amount || Number(amount) <= 0) {
+      alert("Vui lòng nhập số tiền hợp lệ");
+      return;
+    }
 
-    if (!dateValue) return "";
+    setLoading(true);
 
-    return new Date(dateValue).toLocaleString("vi-VN");
+    try {
+      const payload = {
+        type: formType,
+        amount: Number(amount),
+        paymentMethod,
+        note,
+      };
+
+      const res = await apiCreate("cashbook", payload);
+
+      if (res?.data || res?.message) {
+        alert("✅ Đã thêm dòng quỹ tiền");
+        setAmount("");
+        setNote("");
+        setFormType("thu");
+        setPaymentMethod("cash");
+        load();
+      } else {
+        alert("❌ Lỗi thêm dữ liệu");
+      }
+    } catch (error) {
+      console.log("Lỗi thêm quỹ tiền:", error);
+      alert("❌ Lỗi thêm dữ liệu");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // EXPORT CSV
-  const exportExcel = () => {
-    const rows = [
-      ["Loại", "Số tiền", "Ghi chú", "Ngày"],
-      ...data.map((i) => [
-        i.type,
-        i.amount,
-        i.note || "",
-        showDate(i),
-      ]),
-    ];
+  const remove = async (id) => {
+    if (!window.confirm("Bạn có chắc muốn xoá dòng này?")) return;
 
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csv], {
-      type: "text/csv;charset=utf-8;",
+    try {
+      await apiDelete("cashbook", id);
+      alert("✅ Đã xoá dòng quỹ tiền");
+      load();
+    } catch (error) {
+      console.log("Lỗi xoá quỹ tiền:", error);
+      alert("❌ Lỗi xoá dữ liệu");
+    }
+  };
+
+  const exportExcel = () => {
+    const rows = filtered.map((item) => ({
+      Loại: item.type === "thu" ? "Thu" : "Chi",
+      "Số tiền": Number(item.amount || 0),
+      "Phương thức":
+        item.payment_method === "bank" || item.paymentMethod === "bank"
+          ? "Chuyển khoản"
+          : "Tiền mặt",
+      "Ghi chú": item.note || "",
+      Ngày: showDate(item),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(wb, ws, "Quỹ tiền");
+
+    const excelBuffer = XLSX.write(wb, {
+      bookType: "xlsx",
+      type: "array",
     });
 
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob([excelBuffer], {
+      type: "application/octet-stream",
+    });
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "quy_tien.csv";
-    a.click();
-
-    URL.revokeObjectURL(url);
+    saveAs(blob, "quy-tien.xlsx");
   };
 
   return (
-    <div className="page">
-      <h2>💰 Quỹ tiền</h2>
+    <div style={page}>
+      <div style={header}>
+        <div>
+          <h2 style={{ margin: 0 }}>💰 Quỹ tiền</h2>
+          <p style={desc}>
+            Theo dõi thu chi tiền mặt, chuyển khoản, dòng tiền từ bán hàng và chi phí.
+          </p>
+        </div>
 
-      {/* SUMMARY */}
-      <div style={{ marginBottom: 15 }}>
-        <b style={{ color: "green" }}>Thu: {totalThu.toLocaleString()} đ</b>{" "}
-        |{" "}
-        <b style={{ color: "red" }}>Chi: {totalChi.toLocaleString()} đ</b>
+        <button onClick={load} style={btn}>
+          ⟳ Tải lại
+        </button>
       </div>
 
-      {/* PROFIT */}
-      <div style={{ marginBottom: 15 }}>
-        <b>📊 Doanh thu: {totalRevenue.toLocaleString()} đ</b> |{" "}
-        <b>💸 Chi phí: {totalExpense.toLocaleString()} đ</b> |{" "}
-        <b style={{ color: profit >= 0 ? "green" : "red" }}>
-          Lãi: {profit.toLocaleString()} đ
-        </b>
+      <div style={cardGrid}>
+        <div style={card("#e8f5e9", "#16a34a")}>
+          <p>Tổng thu</p>
+          <h3 style={{ color: "#15803d" }}>{money(totalThu)}</h3>
+          <span>Theo bộ lọc hiện tại</span>
+        </div>
+
+        <div style={card("#ffebee", "#ef4444")}>
+          <p>Tổng chi</p>
+          <h3 style={{ color: "#dc2626" }}>{money(totalChi)}</h3>
+          <span>Theo bộ lọc hiện tại</span>
+        </div>
+
+        <div style={card("#e3f2fd", "#2196f3")}>
+          <p>Còn lại</p>
+          <h3 style={{ color: balance >= 0 ? "#15803d" : "#dc2626" }}>
+            {money(balance)}
+          </h3>
+          <span>Thu - chi</span>
+        </div>
+
+        <div style={card("#fff3e0", "#ff9800")}>
+          <p>Lợi nhuận tạm tính</p>
+          <h3 style={{ color: profit >= 0 ? "#15803d" : "#dc2626" }}>
+            {money(profit)}
+          </h3>
+          <span>Doanh thu - chi phí</span>
+        </div>
       </div>
 
-      {/* FORM */}
-      <div className="toolbar">
-        <select value={formType} onChange={(e) => setFormType(e.target.value)}>
+      <div style={infoGrid}>
+        <div style={infoBox}>
+          <b>📊 Doanh thu đơn hàng</b>
+          <h3>{money(totalRevenue)}</h3>
+        </div>
+
+        <div style={infoBox}>
+          <b>💸 Chi phí phát sinh</b>
+          <h3>{money(totalExpense)}</h3>
+        </div>
+
+        <div style={infoBox}>
+          <b>📄 Số dòng quỹ tiền</b>
+          <h3>{filtered.length}</h3>
+        </div>
+      </div>
+
+      <div style={formBox}>
+        <select
+          value={formType}
+          onChange={(e) => setFormType(e.target.value)}
+          style={input}
+        >
           <option value="thu">Thu</option>
           <option value="chi">Chi</option>
         </select>
 
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          style={input}
+        >
+          <option value="cash">Tiền mặt</option>
+          <option value="bank">Chuyển khoản</option>
+        </select>
+
         <input
+          type="number"
           placeholder="Số tiền..."
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          style={input}
         />
 
         <input
           placeholder="Ghi chú..."
           value={note}
           onChange={(e) => setNote(e.target.value)}
+          style={noteInput}
         />
 
-        <button onClick={add}>+ Thêm</button>
+        <button onClick={add} disabled={loading} style={primaryBtn}>
+          {loading ? "Đang thêm..." : "+ Thêm"}
+        </button>
+      </div>
 
+      <div style={filterBox}>
         <input
           type="date"
           value={filterDate}
           onChange={(e) => setFilterDate(e.target.value)}
+          style={input}
         />
 
-        <select value={type} onChange={(e) => setType(e.target.value)}>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          style={input}
+        >
           <option value="all">Tất cả</option>
           <option value="thu">Thu</option>
           <option value="chi">Chi</option>
         </select>
 
-        <button onClick={exportExcel}>Export Excel</button>
+        <button
+          onClick={() => {
+            setFilterDate("");
+            setType("all");
+          }}
+          style={btn}
+        >
+          Xóa lọc
+        </button>
+
+        <button onClick={exportExcel} style={btn}>
+          Xuất Excel
+        </button>
       </div>
 
-      {/* TABLE */}
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Loại</th>
-            <th>Số tiền</th>
-            <th>Ghi chú</th>
-            <th>Ngày</th>
-            <th></th>
-          </tr>
-        </thead>
+      <div style={section}>
+        <div style={sectionHeader}>
+          <h3>Danh sách thu chi</h3>
+          <span style={badge}>{filtered.length} dòng</span>
+        </div>
 
-        <tbody>
-          {filtered.map((d, index) => (
-            <tr key={d.id}>
-              <td>{index + 1}</td>
-
-              <td style={{ color: d.type === "thu" ? "green" : "red" }}>
-                {d.type === "thu" ? "Thu" : "Chi"}
-              </td>
-
-              <td>{Number(d.amount || 0).toLocaleString()} đ</td>
-
-              <td>{d.note}</td>
-
-              <td>{showDate(d)}</td>
-
-              <td>
-                <button onClick={() => remove(d.id)}>X</button>
-              </td>
-            </tr>
-          ))}
-
-          {filtered.length === 0 && (
+        <table style={table}>
+          <thead>
             <tr>
-              <td colSpan="6" style={{ textAlign: "center", padding: 20 }}>
-                Chưa có dữ liệu quỹ tiền
-              </td>
+              <th style={th}>#</th>
+              <th style={th}>Loại</th>
+              <th style={th}>Số tiền</th>
+              <th style={th}>Phương thức</th>
+              <th style={th}>Ghi chú</th>
+              <th style={th}>Ngày</th>
+              <th style={th}>Hành động</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan="7" style={empty}>
+                  Chưa có dữ liệu quỹ tiền
+                </td>
+              </tr>
+            ) : (
+              filtered.map((item, index) => {
+                const method = item.payment_method || item.paymentMethod;
+
+                return (
+                  <tr key={item.id}>
+                    <td style={td}>{index + 1}</td>
+
+                    <td style={td}>
+                      <span
+                        style={{
+                          ...typeBadge,
+                          background:
+                            item.type === "thu" ? "#dcfce7" : "#fee2e2",
+                          color: item.type === "thu" ? "#15803d" : "#dc2626",
+                        }}
+                      >
+                        {item.type === "thu" ? "Thu" : "Chi"}
+                      </span>
+                    </td>
+
+                    <td style={td}>
+                      <b>{money(item.amount)}</b>
+                    </td>
+
+                    <td style={td}>
+                      {method === "bank" ? "Chuyển khoản" : "Tiền mặt"}
+                    </td>
+
+                    <td style={td}>{item.note || "—"}</td>
+
+                    <td style={td}>{showDate(item)}</td>
+
+                    <td style={td}>
+                      <button onClick={() => remove(item.id)} style={deleteBtn}>
+                        Xóa
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
+/* STYLE */
+const page = {
+  padding: 24,
+  background: "#f4f7fb",
+  minHeight: "100vh",
+};
+
+const header = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 18,
+};
+
+const desc = {
+  margin: "6px 0 0",
+  color: "#6b7280",
+};
+
+const cardGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 14,
+  marginBottom: 14,
+};
+
+const card = (bg, borderColor) => ({
+  background: bg,
+  padding: 18,
+  borderRadius: 12,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
+  borderLeft: `5px solid ${borderColor}`,
+});
+
+const infoGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 14,
+  marginBottom: 18,
+};
+
+const infoBox = {
+  background: "white",
+  padding: 16,
+  borderRadius: 12,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+};
+
+const formBox = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  background: "white",
+  padding: 14,
+  borderRadius: 12,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+  marginBottom: 12,
+};
+
+const filterBox = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  background: "white",
+  padding: 14,
+  borderRadius: 12,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+  marginBottom: 18,
+};
+
+const input = {
+  padding: 9,
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  minWidth: 150,
+};
+
+const noteInput = {
+  padding: 9,
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  minWidth: 260,
+  flex: 1,
+};
+
+const btn = {
+  padding: "9px 14px",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  background: "white",
+  cursor: "pointer",
+};
+
+const primaryBtn = {
+  padding: "9px 14px",
+  border: "none",
+  borderRadius: 8,
+  background: "#2f43a3",
+  color: "white",
+  cursor: "pointer",
+};
+
+const section = {
+  background: "white",
+  padding: 18,
+  borderRadius: 12,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+};
+
+const sectionHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 12,
+};
+
+const badge = {
+  background: "#eef2ff",
+  color: "#2f43a3",
+  padding: "5px 10px",
+  borderRadius: 999,
+  fontWeight: 600,
+};
+
+const table = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const th = {
+  background: "#2f43a3",
+  color: "white",
+  padding: 10,
+  textAlign: "left",
+};
+
+const td = {
+  padding: 10,
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const empty = {
+  padding: 30,
+  textAlign: "center",
+  color: "#6b7280",
+};
+
+const typeBadge = {
+  padding: "5px 10px",
+  borderRadius: 999,
+  fontWeight: 700,
+};
+
+const deleteBtn = {
+  padding: "6px 10px",
+  background: "#ef4444",
+  color: "white",
+  border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
+};

@@ -1,13 +1,15 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("admin@gmail.com");
   const [password, setPassword] = useState("123456");
   const [loading, setLoading] = useState(false);
 
+  const navigate = useNavigate();
+
   const handleLogin = async (e) => {
     e.preventDefault();
-
     setLoading(true);
 
     try {
@@ -33,9 +35,8 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       setLoading(false);
-
-      // quan trọng
-      window.location.href = "/";
+      navigate("/");
+      window.location.reload();
     } catch (error) {
       console.log("Lỗi login:", error);
       alert("Không kết nối được backend!");

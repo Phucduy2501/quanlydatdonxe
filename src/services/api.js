@@ -4,75 +4,77 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
-export async function apiGet(module) {
-  const res = await fetch(`${API_URL}/${module}`, {
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+async function request(endpoint, options = {}) {
+  const token = getToken();
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_URL}/${endpoint}`, {
+    ...options,
+    headers,
   });
 
-  return res.json();
+  const data = await res.json().catch(() => null);
+
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+    return null;
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.message || "Lỗi API");
+  }
+
+  return data;
+}
+
+export async function apiGet(module) {
+  return request(module, {
+    method: "GET",
+  });
 }
 
 export async function apiCreate(module, data) {
-  const res = await fetch(`${API_URL}/${module}`, {
+  return request(module, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
     body: JSON.stringify(data),
   });
-
-  return res.json();
 }
 
 export async function apiUpdate(module, id, data) {
-  const res = await fetch(`${API_URL}/${module}/${id}`, {
+  return request(`${module}/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
     body: JSON.stringify(data),
   });
-
-  return res.json();
 }
 
 export async function apiDelete(module, id) {
-  const res = await fetch(`${API_URL}/${module}/${id}`, {
+  return request(`${module}/${id}`, {
     method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
   });
-
-  return res.json();
 }
 
+// THÊM HÀM NÀY ĐỂ SalesMulti.jsx DÙNG
 export async function apiCreateFullOrder(data) {
-  const res = await fetch(`${API_URL}/orders/create-full`, {
+  return request("orders/create-full", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
     body: JSON.stringify(data),
   });
-
-  return res.json();
 }
 
+// Dùng sau này nếu cần sửa đơn đầy đủ
 export async function apiUpdateFullOrder(id, data) {
-  const res = await fetch(`${API_URL}/orders/${id}/update-full`, {
+  return request(`orders/${id}/update-full`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
     body: JSON.stringify(data),
   });
-
-  return res.json();
 }

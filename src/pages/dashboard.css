@@ -350,3 +350,28 @@
     display: none;
   }
 }
+
+
+.reload-btn {
+  border: 1px solid #d7def0;
+  background: #fff;
+  color: #2f43a3;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.summary-card {
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+.panel-footer span {
+  cursor: pointer;
+}
