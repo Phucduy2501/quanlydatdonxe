@@ -2,686 +2,978 @@ import { useEffect, useState } from "react";
 import {
   apiGet,
   apiDelete,
-  apiCreateFullOrder,
-  apiUpdateFullOrder,
+  apiGetBookingDetail,
+  apiUpdateBookingStatus,
+  apiCheckInTicket,
 } from "../services/api";
 
 export default function Orders() {
-  const [orders, setOrders] = useState([]);
-  const [items, setItems] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [trips, setTrips] = useState([]);
+  const [routes, setRoutes] = useState([]);
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [detail, setDetail] = useState(null);
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingOrder, setEditingOrder] = useState(null);
-
-  const emptyForm = {
-    customerId: "",
-    channel: "POS",
-    paidAmount: 0,
-    paymentMethod: "cash",
-    note: "",
-    items: [
-      {
-        productId: "",
-        quantity: 1,
-        price: 0,
-      },
-    ],
-  };
-
-  const [form, setForm] = useState(emptyForm);
+  const [loading, setLoading] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
+    fetchData();
   }, []);
 
-  const toArray = (res) => {
-    if (Array.isArray(res)) return res;
-    if (Array.isArray(res?.data)) return res.data;
-    return [];
-  };
-
-  const fetchOrders = async () => {
-    try {
-      const ordersData = await apiGet("orders");
-      const itemsData = await apiGet("orderItems");
-      const productsData = await apiGet("products");
-      const customersData = await apiGet("customers");
-
-      setOrders(toArray(ordersData));
-      setItems(toArray(itemsData));
-      setProducts(toArray(productsData));
-      setCustomers(toArray(customersData));
-    } catch (error) {
-      console.log("Lỗi tải đơn hàng:", error);
-      setOrders([]);
-      setItems([]);
-      setProducts([]);
-      setCustomers([]);
+  function toArray(response) {
+    if (Array.isArray(response)) {
+      return response;
     }
-  };
 
-  const getOrderItems = (orderId) => {
-    return items.filter(
-      (item) => String(item.order_id || item.orderId) === String(orderId)
+    if (response && Array.isArray(response.data)) {
+      return response.data;
+    }
+
+    return [];
+  }
+
+  async function fetchData() {
+    try {
+      setLoading(true);
+
+      const [
+        bookingResponse,
+        customerResponse,
+        tripResponse,
+        routeResponse,
+      ] = await Promise.all([
+        apiGet("bookings"),
+        apiGet("customers"),
+        apiGet("trips"),
+        apiGet("routes"),
+      ]);
+
+      setBookings(toArray(bookingResponse));
+      setCustomers(toArray(customerResponse));
+      setTrips(toArray(tripResponse));
+      setRoutes(toArray(routeResponse));
+    } catch (error) {
+      console.error("Lỗi tải dữ liệu đặt vé:", error);
+
+      alert(
+        error.message ||
+          "Không tải được danh sách đặt vé"
+      );
+
+      setBookings([]);
+      setCustomers([]);
+      setTrips([]);
+      setRoutes([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getCustomer(customerId) {
+    return customers.find(
+      (customer) =>
+        String(customer.id) === String(customerId)
     );
-  };
+  }
 
-  const getProductName = (productId) => {
-    const product = products.find((p) => String(p.id) === String(productId));
-    return product?.name || "Sản phẩm";
-  };
+  function getTrip(tripId) {
+    return trips.find(
+      (trip) =>
+        String(trip.id) === String(tripId)
+    );
+  }
 
-  const getProductUnit = (productId) => {
-    const product = products.find((p) => String(p.id) === String(productId));
-    return product?.unit || "Cái";
-  };
+  function getRoute(routeId) {
+    return routes.find(
+      (route) =>
+        String(route.id) === String(routeId)
+    );
+  }
 
-  const getCustomerById = (customerId) => {
-    return customers.find((c) => String(c.id) === String(customerId));
-  };
+  function formatMoney(value) {
+    return (
+      Number(value || 0).toLocaleString("vi-VN") +
+      " đ"
+    );
+  }
 
-  const handleView = (order) => {
-    setSelected(order);
-  };
+  function formatDateTime(value) {
+    if (!value) {
+      return "Chưa xác định";
+    }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Xoá đơn này?")) return;
+    return new Date(value).toLocaleString("vi-VN");
+  }
+
+  function getBookingStatusLabel(status) {
+    const statusMap = {
+      pending: "Chờ xác nhận",
+      confirmed: "Đã xác nhận",
+      completed: "Đã hoàn thành",
+      cancelled: "Đã hủy",
+    };
+
+    return statusMap[status] || status || "Chưa xác định";
+  }
+
+  function getPaymentStatusLabel(status) {
+    const statusMap = {
+      unpaid: "Chưa thanh toán",
+      paid: "Đã thanh toán",
+      refunded: "Đã hoàn tiền",
+    };
+
+    return statusMap[status] || status || "Chưa xác định";
+  }
+
+  function getPaymentMethodLabel(method) {
+    const methodMap = {
+      cash: "Tiền mặt",
+      bank_transfer: "Chuyển khoản",
+      bank: "Chuyển khoản",
+      momo: "MoMo",
+      vnpay: "VNPay",
+      zalopay: "ZaloPay",
+    };
+
+    return methodMap[method] || method || "Chưa xác định";
+  }
+
+  function getBookingStatusStyle(status) {
+    const styles = {
+      pending: {
+        background: "#fef3c7",
+        color: "#92400e",
+      },
+      confirmed: {
+        background: "#dcfce7",
+        color: "#166534",
+      },
+      completed: {
+        background: "#dbeafe",
+        color: "#1e40af",
+      },
+      cancelled: {
+        background: "#fee2e2",
+        color: "#991b1b",
+      },
+    };
+
+    return styles[status] || {
+      background: "#f3f4f6",
+      color: "#374151",
+    };
+  }
+
+  function getPaymentStatusStyle(status) {
+    const styles = {
+      unpaid: {
+        background: "#fee2e2",
+        color: "#991b1b",
+      },
+      paid: {
+        background: "#dcfce7",
+        color: "#166534",
+      },
+      refunded: {
+        background: "#e0e7ff",
+        color: "#3730a3",
+      },
+    };
+
+    return styles[status] || {
+      background: "#f3f4f6",
+      color: "#374151",
+    };
+  }
+
+  async function handleView(booking) {
+    try {
+      setSelected(booking);
+      setDetail(null);
+      setLoadingDetail(true);
+
+      const response = await apiGetBookingDetail(
+        booking.id
+      );
+
+      setDetail(response);
+    } catch (error) {
+      console.error(
+        "Lỗi lấy chi tiết đặt vé:",
+        error
+      );
+
+      alert(
+        error.message ||
+          "Không tải được chi tiết đặt vé"
+      );
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
+
+  async function handleConfirm(booking) {
+    if (
+      !window.confirm(
+        `Xác nhận đặt vé ${booking.booking_code}?`
+      )
+    ) {
+      return;
+    }
 
     try {
-      await apiDelete("orders", id);
+      await apiUpdateBookingStatus(booking.id, {
+        bookingStatus: "confirmed",
+      });
+
+      alert("Đã xác nhận đặt vé");
+
+      await fetchData();
+      await handleView(booking);
+    } catch (error) {
+      console.error(
+        "Lỗi xác nhận đặt vé:",
+        error
+      );
+
+      alert(
+        error.message ||
+          "Không thể xác nhận đặt vé"
+      );
+    }
+  }
+
+  async function handleCancel(booking) {
+    if (
+      !window.confirm(
+        `Bạn có chắc muốn hủy đặt vé ${booking.booking_code}?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await apiUpdateBookingStatus(booking.id, {
+        bookingStatus: "cancelled",
+      });
+
+      alert("Đã hủy đặt vé");
 
       setSelected(null);
-      fetchOrders();
+      setDetail(null);
+
+      await fetchData();
     } catch (error) {
-      console.log("Lỗi xoá đơn hàng:", error);
-      alert("❌ Lỗi xoá đơn hàng");
+      console.error("Lỗi hủy đặt vé:", error);
+
+      alert(
+        error.message ||
+          "Không thể hủy đặt vé"
+      );
     }
-  };
+  }
 
-  const openAddOrder = () => {
-    setEditingOrder(null);
-    setForm(emptyForm);
-    setShowForm(true);
-  };
-
-  const openEditOrder = (order) => {
-    const orderItems = getOrderItems(order.id);
-
-    setEditingOrder(order);
-
-    setForm({
-      customerId: order.customer_id || "",
-      channel: order.channel || "POS",
-      paidAmount: Number(order.paid_amount || 0),
-      paymentMethod: "cash",
-      note: order.note || "",
-      items:
-        orderItems.length > 0
-          ? orderItems.map((item) => ({
-              productId: item.product_id || item.productId || "",
-              quantity: Number(item.quantity || 1),
-              price: Number(item.price || 0),
-            }))
-          : [
-              {
-                productId: "",
-                quantity: 1,
-                price: 0,
-              },
-            ],
-    });
-
-    setShowForm(true);
-  };
-
-  const updateItem = (index, field, value) => {
-    const newItems = [...form.items];
-
-    newItems[index] = {
-      ...newItems[index],
-      [field]: value,
-    };
-
-    if (field === "productId") {
-      const product = products.find((p) => String(p.id) === String(value));
-      newItems[index].price = Number(product?.price || 0);
-    }
-
-    setForm({
-      ...form,
-      items: newItems,
-    });
-  };
-
-  const addItemRow = () => {
-    setForm({
-      ...form,
-      items: [
-        ...form.items,
-        {
-          productId: "",
-          quantity: 1,
-          price: 0,
-        },
-      ],
-    });
-  };
-
-  const removeItemRow = (index) => {
-    const newItems = form.items.filter((_, i) => i !== index);
-
-    setForm({
-      ...form,
-      items: newItems.length ? newItems : emptyForm.items,
-    });
-  };
-
-  const formTotal = form.items.reduce((sum, item) => {
-    return sum + Number(item.quantity || 0) * Number(item.price || 0);
-  }, 0);
-
-  const saveOrder = async () => {
-    if (!form.customerId) {
-      alert("Vui lòng chọn khách hàng");
+  async function handleMarkPaid(booking) {
+    if (
+      !window.confirm(
+        `Xác nhận booking ${booking.booking_code} đã thanh toán?`
+      )
+    ) {
       return;
     }
-
-    const validItems = form.items.filter(
-      (item) => item.productId && Number(item.quantity) > 0
-    );
-
-    if (!validItems.length) {
-      alert("Vui lòng chọn sản phẩm");
-      return;
-    }
-
-    const payload = {
-      customerId: Number(form.customerId),
-      channel: form.channel,
-      paidAmount: Number(form.paidAmount || 0),
-      paymentMethod: form.paymentMethod,
-      note: form.note,
-      items: validItems.map((item) => ({
-        productId: Number(item.productId),
-        quantity: Number(item.quantity),
-        price: Number(item.price),
-      })),
-    };
 
     try {
-      let res;
+      await apiUpdateBookingStatus(booking.id, {
+        bookingStatus: "confirmed",
+        paymentStatus: "paid",
+      });
 
-      if (editingOrder) {
-        res = await apiUpdateFullOrder(editingOrder.id, payload);
-      } else {
-        res = await apiCreateFullOrder(payload);
-      }
+      alert("Đã cập nhật thanh toán");
 
-      if (res?.data) {
-        alert(editingOrder ? "✅ Đã sửa đơn hàng" : "✅ Đã thêm đơn hàng");
+      await fetchData();
+      await handleView(booking);
+    } catch (error) {
+      console.error(
+        "Lỗi cập nhật thanh toán:",
+        error
+      );
 
-        setShowForm(false);
-        setEditingOrder(null);
-        setForm(emptyForm);
+      alert(
+        error.message ||
+          "Không thể cập nhật thanh toán"
+      );
+    }
+  }
 
-        await fetchOrders();
-      } else {
-        alert(res?.message || "❌ Lỗi lưu đơn hàng");
+  async function handleCheckIn(ticket) {
+    if (
+      !window.confirm(
+        `Check-in vé ${ticket.ticket_code}?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await apiCheckInTicket(ticket.id);
+
+      alert("Check-in vé thành công");
+
+      if (selected) {
+        await handleView(selected);
       }
     } catch (error) {
-      console.log("Lỗi lưu đơn hàng:", error);
-      alert("❌ Lỗi lưu đơn hàng");
+      console.error("Lỗi check-in:", error);
+
+      alert(
+        error.message ||
+          "Không thể check-in vé"
+      );
     }
-  };
+  }
 
-  const handlePrint = () => {
-    if (!selected) return;
+  async function handleDelete(booking) {
+    if (
+      !window.confirm(
+        `Xóa hoàn toàn booking ${booking.booking_code}?`
+      )
+    ) {
+      return;
+    }
 
-    const orderItems = getOrderItems(selected.id);
-    const total = Number(selected.total || 0);
-    const paidAmount = Number(selected.paid_amount || 0);
-    const debtAmount = Number(selected.debt_amount || Math.max(total - paidAmount, 0));
+    try {
+      await apiDelete("bookings", booking.id);
 
-    const customer = getCustomerById(selected.customer_id);
+      alert("Đã xóa đặt vé");
 
-    const formatMoney = (num) =>
-      Number(num || 0).toLocaleString("vi-VN") + ",00";
+      setSelected(null);
+      setDetail(null);
 
-    const orderDate = selected.date
-      ? new Date(selected.date).toLocaleDateString("vi-VN")
-      : selected.created_at
-      ? new Date(selected.created_at).toLocaleDateString("vi-VN")
-      : new Date().toLocaleDateString("vi-VN");
+      await fetchData();
+    } catch (error) {
+      console.error("Lỗi xóa đặt vé:", error);
 
-    const orderTime = selected.created_at
-      ? new Date(selected.created_at).toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+      alert(
+        error.message ||
+          "Không thể xóa vì booking đang có vé hoặc thanh toán liên quan"
+      );
+    }
+  }
 
-    const w = window.open("", "_blank");
+  function handlePrint() {
+    if (!detail || !detail.booking) {
+      return;
+    }
 
-    w.document.write(`
-      <html>
-      <head>
-        <title>Phiếu giao hàng</title>
+    const booking = detail.booking;
+    const tickets = detail.tickets || [];
+    const payments = detail.payments || [];
 
-        <style>
-          @page {
-            size: A4 landscape;
-            margin: 10mm;
-          }
+    const payment = payments[0] || {};
 
-          * {
-            box-sizing: border-box;
-          }
+    const popup = window.open(
+      "",
+      "_blank",
+      "width=900,height=700"
+    );
 
-          body {
-            font-family: "Times New Roman", serif;
-            color: #000;
-            padding: 10px 20px;
-            font-size: 18px;
-          }
+    if (!popup) {
+      alert(
+        "Trình duyệt đang chặn cửa sổ in"
+      );
+      return;
+    }
 
-          .page {
-            width: 100%;
-            border-top: 4px double #000;
-            padding-top: 10px;
-          }
+    popup.document.write(`
+      <!DOCTYPE html>
+      <html lang="vi">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Vé xe TransitGo</title>
 
-          h1 {
-            text-align: center;
-            font-size: 34px;
-            margin: 10px 0 22px;
-            font-weight: bold;
-          }
-
-          .info-row {
-            display: grid;
-            grid-template-columns: 1.3fr 0.8fr;
-            gap: 30px;
-            margin-bottom: 8px;
-          }
-
-          .info-left div,
-          .info-right div {
-            margin-bottom: 8px;
-            font-size: 21px;
-            font-weight: bold;
-          }
-
-          .label {
-            display: inline-block;
-            min-width: 150px;
-          }
-
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-
-          .items-table th,
-          .items-table td {
-            border: 2px solid #000;
-            padding: 7px 8px;
-            font-size: 20px;
-            line-height: 1.2;
-          }
-
-          .items-table th {
-            text-align: center;
-            font-weight: bold;
-            font-size: 21px;
-          }
-
-          .center {
-            text-align: center;
-          }
-
-          .right {
-            text-align: right;
-          }
-
-          .note-total-row {
-            display: grid;
-            grid-template-columns: 1.35fr 0.9fr;
-            border-left: 2px solid #000;
-            border-right: 2px solid #000;
-            border-bottom: 2px solid #000;
-          }
-
-          .note-box {
-            border-right: 2px solid #000;
-            padding: 8px;
-            min-height: 110px;
-            font-size: 21px;
-            font-weight: bold;
-          }
-
-          .dot-line {
-            border-bottom: 2px dotted #000;
-            height: 30px;
-            margin-top: 6px;
-          }
-
-          .total-box table td {
-            border-bottom: 2px solid #000;
-            padding: 6px 8px;
-            font-size: 21px;
-            font-weight: bold;
-          }
-
-          .total-box table tr:last-child td {
-            border-bottom: none;
-          }
-
-          .money-text {
-            border-left: 2px solid #000;
-            border-right: 2px solid #000;
-            border-bottom: 2px solid #000;
-            padding: 6px 8px;
-            text-align: right;
-            font-size: 21px;
-          }
-
-          .debt-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            border-left: 2px solid #000;
-            border-right: 2px solid #000;
-            border-bottom: 2px solid #000;
-            font-size: 21px;
-            font-weight: bold;
-          }
-
-          .debt-row div {
-            padding: 7px 8px;
-          }
-
-          .thanks {
-            text-align: center;
-            font-size: 22px;
-            font-weight: bold;
-            margin: 18px 0 20px;
-          }
-
-          .sign-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            margin-top: 10px;
-            text-align: center;
-            font-size: 22px;
-            font-weight: bold;
-          }
-
-          .sign-row span {
-            display: block;
-            font-size: 18px;
-            font-weight: normal;
-            margin-top: 5px;
-          }
-
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
+          <style>
+            @page {
+              size: A4;
+              margin: 15mm;
             }
-          }
-        </style>
-      </head>
 
-      <body>
-        <div class="page">
-          <h1>PHIẾU GIAO HÀNG</h1>
+            * {
+              box-sizing: border-box;
+            }
 
-          <div class="info-row">
-            <div class="info-left">
-              <div><span class="label">Khách hàng:</span> ${
-                customer?.name || "........................................"
-              }</div>
-              <div><span class="label">SĐT:</span> ${
-                customer?.phone || "........................................"
-              }</div>
-              <div><span class="label">Địa chỉ:</span> ${
-                customer?.address || "........................................"
-              }</div>
-            </div>
+            body {
+              margin: 0;
+              padding: 20px;
+              font-family: Arial, sans-serif;
+              color: #111827;
+            }
 
-            <div class="info-right">
-              <div>Ngày: ${orderDate} - ${orderTime}</div>
-              <div>Số: ${selected.id}</div>
-              <div>Thu ngân: Admin</div>
-            </div>
-          </div>
+            .ticket-wrapper {
+              max-width: 850px;
+              margin: auto;
+              border: 2px solid #2563eb;
+              border-radius: 16px;
+              overflow: hidden;
+            }
 
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th style="width: 55px;">STT</th>
-                <th>Tên hàng hóa</th>
-                <th style="width: 90px;">ĐVT</th>
-                <th style="width: 75px;">SL</th>
-                <th style="width: 90px;">ĐVC</th>
-                <th style="width: 75px;">SL</th>
-                <th style="width: 150px;">Đơn giá</th>
-                <th style="width: 170px;">Thành tiền</th>
-              </tr>
-            </thead>
+            .ticket-header {
+              padding: 22px;
+              background: #2563eb;
+              color: white;
+              text-align: center;
+            }
 
-            <tbody>
-              ${
-                orderItems.length > 0
-                  ? orderItems
-                      .map((i, index) => {
-                        const quantity = Number(i.quantity || 0);
-                        const price = Number(i.price || 0);
-                        const productId = i.product_id || i.productId;
-                        const name = getProductName(productId);
-                        const unit = getProductUnit(productId);
+            .ticket-header h1 {
+              margin: 0;
+              font-size: 30px;
+            }
 
-                        return `
-                          <tr>
-                            <td class="center">${index + 1}</td>
-                            <td>${name}</td>
-                            <td class="center">${unit}</td>
-                            <td class="right">${quantity}</td>
-                            <td class="center"></td>
-                            <td class="center"></td>
-                            <td class="right">${formatMoney(price)}</td>
-                            <td class="right">${formatMoney(quantity * price)}</td>
-                          </tr>
-                        `;
-                      })
-                      .join("")
-                  : `
-                    <tr>
-                      <td class="center">1</td>
-                      <td>Sản phẩm</td>
-                      <td class="center">Cái</td>
-                      <td class="right">1</td>
-                      <td class="center"></td>
-                      <td class="center"></td>
-                      <td class="right">${formatMoney(total)}</td>
-                      <td class="right">${formatMoney(total)}</td>
-                    </tr>
-                  `
+            .ticket-header p {
+              margin: 8px 0 0;
+            }
+
+            .ticket-body {
+              padding: 24px;
+            }
+
+            .booking-code {
+              padding: 14px;
+              margin-bottom: 20px;
+              text-align: center;
+              background: #eff6ff;
+              border-radius: 10px;
+              font-size: 22px;
+              font-weight: bold;
+              color: #1d4ed8;
+            }
+
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 14px 30px;
+              margin-bottom: 24px;
+            }
+
+            .info-item {
+              border-bottom: 1px dashed #d1d5db;
+              padding-bottom: 8px;
+            }
+
+            .label {
+              display: block;
+              color: #6b7280;
+              font-size: 13px;
+              margin-bottom: 5px;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 12px;
+            }
+
+            th,
+            td {
+              border: 1px solid #d1d5db;
+              padding: 10px;
+              text-align: left;
+            }
+
+            th {
+              background: #eff6ff;
+            }
+
+            .summary {
+              margin-top: 20px;
+              display: flex;
+              justify-content: flex-end;
+            }
+
+            .summary-box {
+              width: 340px;
+              background: #f8fafc;
+              border-radius: 10px;
+              padding: 14px;
+            }
+
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 6px 0;
+            }
+
+            .total {
+              margin-top: 8px;
+              padding-top: 10px;
+              border-top: 1px solid #d1d5db;
+              font-size: 18px;
+              font-weight: bold;
+              color: #1d4ed8;
+            }
+
+            .footer {
+              margin-top: 25px;
+              text-align: center;
+              color: #6b7280;
+              font-size: 14px;
+            }
+
+            @media print {
+              body {
+                padding: 0;
               }
-            </tbody>
-          </table>
+            }
+          </style>
+        </head>
 
-          <div class="note-total-row">
-            <div class="note-box">
-              Ghi chú giao hàng:
-              <div class="dot-line">${selected.note || ""}</div>
-              <div class="dot-line"></div>
+        <body>
+          <div class="ticket-wrapper">
+            <div class="ticket-header">
+              <h1>🚌 TRANSITGO</h1>
+              <p>Hệ thống đặt vé xe buýt và quản lý tuyến đường</p>
             </div>
 
-            <div class="total-box">
+            <div class="ticket-body">
+              <div class="booking-code">
+                MÃ ĐẶT VÉ: ${booking.booking_code || booking.id}
+              </div>
+
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">Hành khách</span>
+                  <strong>${booking.passenger_name || ""}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Số điện thoại</span>
+                  <strong>${booking.passenger_phone || ""}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Tuyến xe</span>
+                  <strong>${booking.route_name || booking.route_code || ""}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Mã chuyến</span>
+                  <strong>${booking.trip_code || ""}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Điểm đi</span>
+                  <strong>${booking.departure_station_name || ""}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Điểm đến</span>
+                  <strong>${booking.arrival_station_name || ""}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Khởi hành</span>
+                  <strong>${formatDateTime(booking.departure_time)}</strong>
+                </div>
+
+                <div class="info-item">
+                  <span class="label">Trạng thái</span>
+                  <strong>${getBookingStatusLabel(
+                    booking.booking_status
+                  )}</strong>
+                </div>
+              </div>
+
+              <h3>Danh sách vé</h3>
+
               <table>
-                <tr>
-                  <td>Tiền hàng</td>
-                  <td class="right">${formatMoney(total)}đ</td>
-                </tr>
-                <tr>
-                  <td>Tổng thanh toán</td>
-                  <td class="right">${formatMoney(total)}đ</td>
-                </tr>
-                <tr>
-                  <td>Ghi nợ</td>
-                  <td class="right">${formatMoney(debtAmount)}đ</td>
-                </tr>
-                <tr>
-                  <td>Còn phải thu</td>
-                  <td class="right">${formatMoney(Math.max(total - paidAmount - debtAmount, 0))}đ</td>
-                </tr>
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Mã vé</th>
+                    <th>Ghế</th>
+                    <th>Hành khách</th>
+                    <th>Giá vé</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  ${
+                    tickets.length > 0
+                      ? tickets
+                          .map(
+                            (ticket, index) => `
+                              <tr>
+                                <td>${index + 1}</td>
+                                <td>${ticket.ticket_code || ""}</td>
+                                <td>${ticket.seat_number || "Chưa xếp ghế"}</td>
+                                <td>${ticket.passenger_name || ""}</td>
+                                <td>${formatMoney(ticket.price)}</td>
+                                <td>${ticket.ticket_status || ""}</td>
+                              </tr>
+                            `
+                          )
+                          .join("")
+                      : `
+                        <tr>
+                          <td colspan="6" style="text-align:center">
+                            Chưa có vé
+                          </td>
+                        </tr>
+                      `
+                  }
+                </tbody>
               </table>
+
+              <div class="summary">
+                <div class="summary-box">
+                  <div class="summary-row">
+                    <span>Phương thức</span>
+                    <strong>${getPaymentMethodLabel(
+                      payment.payment_method
+                    )}</strong>
+                  </div>
+
+                  <div class="summary-row">
+                    <span>Thanh toán</span>
+                    <strong>${getPaymentStatusLabel(
+                      booking.payment_status
+                    )}</strong>
+                  </div>
+
+                  <div class="summary-row total">
+                    <span>Tổng tiền</span>
+                    <strong>${formatMoney(
+                      booking.total_amount
+                    )}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="footer">
+                Cảm ơn quý khách đã sử dụng dịch vụ TransitGo!
+              </div>
             </div>
           </div>
 
-          <div class="money-text">
-            Số tiền viết bằng chữ: ..............................................................
-          </div>
-
-          <div class="debt-row">
-            <div>Dư nợ trước: 0,00đ</div>
-            <div>Nợ tăng: ${formatMoney(debtAmount)}đ</div>
-            <div>Dư nợ sau: ${formatMoney(debtAmount)}đ</div>
-          </div>
-
-          <div class="thanks">
-            Cảm ơn quý khách đã tin tưởng lựa chọn sản phẩm của cửa hàng!
-          </div>
-
-          <div class="sign-row">
-            <div>
-              Khách hàng
-              <span>(Ký, họ tên)</span>
-            </div>
-
-            <div>
-              Người lập
-              <span>(Ký, họ tên)</span>
-            </div>
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
-      </body>
+          <script>
+            window.onload = function () {
+              window.print();
+            };
+          </script>
+        </body>
       </html>
     `);
 
-    w.document.close();
-  };
+    popup.document.close();
+  }
 
-  const filtered = orders.filter((order) => {
-    const customer = getCustomerById(order.customer_id);
+  const filteredBookings = bookings.filter(
+    (booking) => {
+      const customer = getCustomer(
+        booking.customer_id
+      );
 
-    const text = `${order.id || ""} ${order.channel || ""} ${
-      order.date || ""
-    } ${customer?.name || ""} ${customer?.phone || ""}`.toLowerCase();
+      const trip = getTrip(booking.trip_id);
+      const route = trip
+        ? getRoute(trip.route_id)
+        : null;
 
-    return text.includes(search.toLowerCase());
-  });
+      const text = [
+        booking.id,
+        booking.booking_code,
+        booking.passenger_name,
+        booking.passenger_phone,
+        booking.passenger_email,
+        booking.booking_status,
+        booking.payment_status,
+        customer && customer.name,
+        customer && customer.phone,
+        trip && trip.code,
+        route && route.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return text.includes(
+        search.toLowerCase()
+      );
+    }
+  );
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>📄 Đơn hàng</h2>
+    <div style={pageStyle}>
+      <div style={headerStyle}>
+        <div>
+          <h2 style={{ margin: 0 }}>
+            🎫 Quản lý đặt vé
+          </h2>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input
-          placeholder="🔍 Tìm đơn..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={input}
-        />
+          <p style={descriptionStyle}>
+            Theo dõi booking, vé xe, thanh toán và check-in
+            hành khách.
+          </p>
+        </div>
 
-        <button onClick={fetchOrders} style={btn}>
-          Tải lại
-        </button>
-
-        <button onClick={openAddOrder} style={btnPrimary}>
-          + Thêm đơn
+        <button
+          type="button"
+          onClick={fetchData}
+          style={reloadButtonStyle}
+          disabled={loading}
+        >
+          {loading
+            ? "Đang tải..."
+            : "⟳ Tải lại"}
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 20 }}>
-        <div style={{ flex: 2 }}>
-          <table style={table}>
+      <div style={searchBarStyle}>
+        <input
+          type="text"
+          placeholder="🔍 Tìm mã booking, hành khách, số điện thoại..."
+          value={search}
+          onChange={(event) =>
+            setSearch(event.target.value)
+          }
+          style={searchInputStyle}
+        />
+
+        <div style={countStyle}>
+          Tổng:{" "}
+          <strong>
+            {filteredBookings.length}
+          </strong>{" "}
+          booking
+        </div>
+      </div>
+
+      <div style={mainGridStyle}>
+        <div style={tableWrapperStyle}>
+          <table style={tableStyle}>
             <thead>
               <tr>
-                <th style={th}>ID</th>
-                <th style={th}>Khách hàng</th>
-                <th style={th}>Tổng</th>
-                <th style={th}>Đã trả</th>
-                <th style={th}>Còn nợ</th>
-                <th style={th}>Kênh</th>
-                <th style={th}>Ngày</th>
-                <th style={th}>Hành động</th>
+                <th style={tableHeaderStyle}>
+                  Mã booking
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Hành khách
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Chuyến xe
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Tổng tiền
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Đặt vé
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Thanh toán
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Ngày đặt
+                </th>
+
+                <th style={tableHeaderStyle}>
+                  Thao tác
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {filtered.map((order) => {
-                const customer = getCustomerById(order.customer_id);
+              {filteredBookings.map(
+                (booking) => {
+                  const trip = getTrip(
+                    booking.trip_id
+                  );
 
-                return (
-                  <tr key={order.id}>
-                    <td style={td}>{String(order.id).slice(0, 8)}</td>
+                  const route = trip
+                    ? getRoute(trip.route_id)
+                    : null;
 
-                    <td style={td}>
-                      {customer?.name || "Khách lẻ"}
-                      <br />
-                      <small>{customer?.phone || ""}</small>
-                    </td>
+                  return (
+                    <tr key={booking.id}>
+                      <td style={tableCellStyle}>
+                        <strong>
+                          {booking.booking_code ||
+                            `BK-${booking.id}`}
+                        </strong>
+                      </td>
 
-                    <td style={td}>
-                      {Number(order.total || 0).toLocaleString("vi-VN")} đ
-                    </td>
+                      <td style={tableCellStyle}>
+                        <strong>
+                          {booking.passenger_name ||
+                            "Chưa có tên"}
+                        </strong>
 
-                    <td style={td}>
-                      {Number(order.paid_amount || 0).toLocaleString("vi-VN")} đ
-                    </td>
+                        <br />
 
-                    <td style={td}>
-                      {Number(order.debt_amount || 0).toLocaleString("vi-VN")} đ
-                    </td>
+                        <small style={mutedStyle}>
+                          {booking.passenger_phone ||
+                            ""}
+                        </small>
+                      </td>
 
-                    <td style={td}>{order.channel || "POS"}</td>
+                      <td style={tableCellStyle}>
+                        {trip
+                          ? trip.code ||
+                            `Chuyến #${trip.id}`
+                          : `Chuyến #${booking.trip_id}`}
 
-                    <td style={td}>
-                      {order.date
-                        ? new Date(order.date).toLocaleDateString("vi-VN")
-                        : order.created_at
-                        ? new Date(order.created_at).toLocaleString("vi-VN")
-                        : ""}
-                    </td>
+                        <br />
 
-                    <td style={td}>
-                      <button onClick={() => handleView(order)}>👁</button>{" "}
-                      <button onClick={() => openEditOrder(order)}>✏️</button>{" "}
-                      <button onClick={() => handleDelete(order.id)}>🗑</button>
-                    </td>
-                  </tr>
-                );
-              })}
+                        <small style={mutedStyle}>
+                          {route
+                            ? route.name
+                            : ""}
+                        </small>
+                      </td>
 
-              {filtered.length === 0 && (
+                      <td style={tableCellStyle}>
+                        <strong>
+                          {formatMoney(
+                            booking.total_amount
+                          )}
+                        </strong>
+                      </td>
+
+                      <td style={tableCellStyle}>
+                        <span
+                          style={{
+                            ...statusStyle,
+                            ...getBookingStatusStyle(
+                              booking.booking_status
+                            ),
+                          }}
+                        >
+                          {getBookingStatusLabel(
+                            booking.booking_status
+                          )}
+                        </span>
+                      </td>
+
+                      <td style={tableCellStyle}>
+                        <span
+                          style={{
+                            ...statusStyle,
+                            ...getPaymentStatusStyle(
+                              booking.payment_status
+                            ),
+                          }}
+                        >
+                          {getPaymentStatusLabel(
+                            booking.payment_status
+                          )}
+                        </span>
+                      </td>
+
+                      <td style={tableCellStyle}>
+                        {formatDateTime(
+                          booking.booking_time ||
+                            booking.created_at
+                        )}
+                      </td>
+
+                      <td style={tableCellStyle}>
+                        <div style={actionStyle}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleView(booking)
+                            }
+                            style={viewButtonStyle}
+                            title="Xem chi tiết"
+                          >
+                            👁
+                          </button>
+
+                          {booking.booking_status ===
+                            "pending" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleConfirm(
+                                  booking
+                                )
+                              }
+                              style={
+                                confirmButtonStyle
+                              }
+                              title="Xác nhận"
+                            >
+                              ✓
+                            </button>
+                          )}
+
+                          {booking.payment_status ===
+                            "unpaid" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleMarkPaid(
+                                  booking
+                                )
+                              }
+                              style={paidButtonStyle}
+                              title="Đã thanh toán"
+                            >
+                              💳
+                            </button>
+                          )}
+
+                          {booking.booking_status !==
+                            "cancelled" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCancel(
+                                  booking
+                                )
+                              }
+                              style={
+                                cancelButtonStyle
+                              }
+                              title="Hủy vé"
+                            >
+                              ✕
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDelete(booking)
+                            }
+                            style={deleteButtonStyle}
+                            title="Xóa"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+              )}
+
+              {filteredBookings.length === 0 && (
                 <tr>
-                  <td colSpan="8" style={{ ...td, textAlign: "center" }}>
-                    Chưa có đơn hàng
+                  <td
+                    colSpan="8"
+                    style={emptyTableStyle}
+                  >
+                    Chưa có đặt vé hoặc không tìm thấy dữ liệu
                   </td>
                 </tr>
               )}
@@ -689,304 +981,509 @@ export default function Orders() {
           </table>
         </div>
 
-        <div style={detailBox}>
-          <h3>Chi tiết</h3>
+        <div style={detailBoxStyle}>
+          <div style={detailHeaderStyle}>
+            <h3 style={{ margin: 0 }}>
+              Chi tiết đặt vé
+            </h3>
 
-          {!selected && <p>Chọn đơn</p>}
-
-          {selected && (
-            <>
-              <p>
-                <b>ID:</b> {selected.id}
-              </p>
-
-              <p>
-                <b>Khách:</b>{" "}
-                {getCustomerById(selected.customer_id)?.name || "Khách lẻ"}
-              </p>
-
-              <p>
-                <b>Tổng:</b>{" "}
-                {Number(selected.total || 0).toLocaleString("vi-VN")} đ
-              </p>
-
-              <p>
-                <b>Đã trả:</b>{" "}
-                {Number(selected.paid_amount || 0).toLocaleString("vi-VN")} đ
-              </p>
-
-              <p>
-                <b>Còn nợ:</b>{" "}
-                {Number(selected.debt_amount || 0).toLocaleString("vi-VN")} đ
-              </p>
-
-              <hr />
-
-              <h4>Sản phẩm</h4>
-
-              {getOrderItems(selected.id).length > 0 ? (
-                getOrderItems(selected.id).map((item) => {
-                  const productId = item.product_id || item.productId;
-                  const quantity = Number(item.quantity || 0);
-                  const price = Number(item.price || 0);
-
-                  return (
-                    <div key={item.id} style={{ marginBottom: 8 }}>
-                      <b>{getProductName(productId)}</b>
-                      <br />
-                      SL: {quantity} | Giá:{" "}
-                      {price.toLocaleString("vi-VN")} đ
-                    </div>
-                  );
-                })
-              ) : (
-                <p>Đơn này chưa có sản phẩm chi tiết</p>
-              )}
-
-              <button onClick={handlePrint} style={printBtn}>
-                🖨 In đơn
+            {selected && detail && (
+              <button
+                type="button"
+                onClick={handlePrint}
+                style={printButtonStyle}
+              >
+                🖨 In vé
               </button>
-            </>
+            )}
+          </div>
+
+          {!selected && (
+            <div style={emptyDetailStyle}>
+              Chọn biểu tượng 👁 để xem chi tiết booking
+            </div>
           )}
+
+          {selected && loadingDetail && (
+            <div style={emptyDetailStyle}>
+              Đang tải chi tiết...
+            </div>
+          )}
+
+          {selected &&
+            !loadingDetail &&
+            detail && (
+              <>
+                <div style={bookingCodeStyle}>
+                  {detail.booking.booking_code ||
+                    `BK-${detail.booking.id}`}
+                </div>
+
+                <div style={detailItemStyle}>
+                  <span style={detailLabelStyle}>
+                    Hành khách
+                  </span>
+
+                  <strong>
+                    {detail.booking.passenger_name}
+                  </strong>
+                </div>
+
+                <div style={detailItemStyle}>
+                  <span style={detailLabelStyle}>
+                    Điện thoại
+                  </span>
+
+                  <strong>
+                    {detail.booking.passenger_phone}
+                  </strong>
+                </div>
+
+                <div style={detailItemStyle}>
+                  <span style={detailLabelStyle}>
+                    Email
+                  </span>
+
+                  <strong>
+                    {detail.booking.passenger_email ||
+                      "Không có"}
+                  </strong>
+                </div>
+
+                <div style={detailItemStyle}>
+                  <span style={detailLabelStyle}>
+                    Tuyến xe
+                  </span>
+
+                  <strong>
+                    {detail.booking.route_name ||
+                      detail.booking.route_code ||
+                      ""}
+                  </strong>
+                </div>
+
+                <div style={detailItemStyle}>
+                  <span style={detailLabelStyle}>
+                    Khởi hành
+                  </span>
+
+                  <strong>
+                    {formatDateTime(
+                      detail.booking.departure_time
+                    )}
+                  </strong>
+                </div>
+
+                <div style={detailItemStyle}>
+                  <span style={detailLabelStyle}>
+                    Tổng tiền
+                  </span>
+
+                  <strong style={{ color: "#2563eb" }}>
+                    {formatMoney(
+                      detail.booking.total_amount
+                    )}
+                  </strong>
+                </div>
+
+                <h4 style={sectionTitleStyle}>
+                  Danh sách vé
+                </h4>
+
+                {detail.tickets &&
+                detail.tickets.length > 0 ? (
+                  detail.tickets.map(
+                    (ticket) => (
+                      <div
+                        key={ticket.id}
+                        style={ticketCardStyle}
+                      >
+                        <div>
+                          <strong>
+                            Ghế{" "}
+                            {ticket.seat_number ||
+                              "Chưa xác định"}
+                          </strong>
+
+                          <div style={ticketCodeStyle}>
+                            {ticket.ticket_code}
+                          </div>
+
+                          <small style={mutedStyle}>
+                            {formatMoney(
+                              ticket.price
+                            )}
+                          </small>
+                        </div>
+
+                        <div>
+                          <span
+                            style={{
+                              ...statusStyle,
+                              background:
+                                ticket.ticket_status ===
+                                "used"
+                                  ? "#dbeafe"
+                                  : ticket.ticket_status ===
+                                    "cancelled"
+                                  ? "#fee2e2"
+                                  : "#dcfce7",
+
+                              color:
+                                ticket.ticket_status ===
+                                "used"
+                                  ? "#1e40af"
+                                  : ticket.ticket_status ===
+                                    "cancelled"
+                                  ? "#991b1b"
+                                  : "#166534",
+                            }}
+                          >
+                            {ticket.ticket_status ===
+                            "used"
+                              ? "Đã sử dụng"
+                              : ticket.ticket_status ===
+                                "cancelled"
+                              ? "Đã hủy"
+                              : "Hợp lệ"}
+                          </span>
+
+                          {ticket.ticket_status ===
+                            "valid" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCheckIn(
+                                  ticket
+                                )
+                              }
+                              style={
+                                checkInButtonStyle
+                              }
+                            >
+                              Check-in
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )
+                ) : (
+                  <p style={mutedStyle}>
+                    Booking chưa có vé
+                  </p>
+                )}
+
+                <h4 style={sectionTitleStyle}>
+                  Thanh toán
+                </h4>
+
+                {detail.payments &&
+                detail.payments.length > 0 ? (
+                  detail.payments.map(
+                    (payment) => (
+                      <div
+                        key={payment.id}
+                        style={paymentCardStyle}
+                      >
+                        <div>
+                          <strong>
+                            {formatMoney(
+                              payment.amount
+                            )}
+                          </strong>
+
+                          <div style={mutedStyle}>
+                            {getPaymentMethodLabel(
+                              payment.payment_method
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            ...statusStyle,
+                            background:
+                              payment.payment_status ===
+                              "success"
+                                ? "#dcfce7"
+                                : "#fef3c7",
+
+                            color:
+                              payment.payment_status ===
+                              "success"
+                                ? "#166534"
+                                : "#92400e",
+                          }}
+                        >
+                          {payment.payment_status ===
+                          "success"
+                            ? "Thành công"
+                            : "Đang xử lý"}
+                        </span>
+                      </div>
+                    )
+                  )
+                ) : (
+                  <p style={mutedStyle}>
+                    Chưa có giao dịch thanh toán
+                  </p>
+                )}
+              </>
+            )}
         </div>
       </div>
-
-      {showForm && (
-        <div style={modalOverlay} onClick={() => setShowForm(false)}>
-          <div style={modalBox} onClick={(e) => e.stopPropagation()}>
-            <h3>{editingOrder ? "✏️ Sửa đơn hàng" : "➕ Thêm đơn hàng"}</h3>
-
-            <label>Khách hàng</label>
-            <select
-              value={form.customerId}
-              onChange={(e) =>
-                setForm({ ...form, customerId: e.target.value })
-              }
-              style={inputFull}
-            >
-              <option value="">-- Chọn khách hàng --</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} - {c.phone}
-                </option>
-              ))}
-            </select>
-
-            <label>Kênh bán</label>
-            <input
-              value={form.channel}
-              onChange={(e) =>
-                setForm({ ...form, channel: e.target.value })
-              }
-              style={inputFull}
-            />
-
-            <h4>Sản phẩm</h4>
-
-            {form.items.map((item, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 0.7fr 1fr 40px",
-                  gap: 8,
-                  marginBottom: 8,
-                }}
-              >
-                <select
-                  value={item.productId}
-                  onChange={(e) =>
-                    updateItem(index, "productId", e.target.value)
-                  }
-                  style={inputFull}
-                >
-                  <option value="">-- Chọn sản phẩm --</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} | Tồn: {p.stock} | Giá:{" "}
-                      {Number(p.price || 0).toLocaleString("vi-VN")} đ
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  type="number"
-                  placeholder="SL"
-                  value={item.quantity}
-                  onChange={(e) =>
-                    updateItem(index, "quantity", e.target.value)
-                  }
-                  style={inputFull}
-                />
-
-                <input
-                  type="number"
-                  placeholder="Giá"
-                  value={item.price}
-                  onChange={(e) =>
-                    updateItem(index, "price", e.target.value)
-                  }
-                  style={inputFull}
-                />
-
-                <button onClick={() => removeItemRow(index)}>X</button>
-              </div>
-            ))}
-
-            <button onClick={addItemRow} style={btn}>
-              + Thêm sản phẩm
-            </button>
-
-            <div style={{ marginTop: 12, marginBottom: 10 }}>
-              <b>Tổng tiền: {formTotal.toLocaleString("vi-VN")} đ</b>
-            </div>
-
-            <label>Khách đã trả</label>
-            <input
-              type="number"
-              value={form.paidAmount}
-              onChange={(e) =>
-                setForm({ ...form, paidAmount: e.target.value })
-              }
-              style={inputFull}
-            />
-
-            <div style={{ marginBottom: 10 }}>
-              <b>
-                Còn nợ:{" "}
-                {Math.max(
-                  formTotal - Number(form.paidAmount || 0),
-                  0
-                ).toLocaleString("vi-VN")}{" "}
-                đ
-              </b>
-            </div>
-
-            <label>Phương thức thanh toán</label>
-            <select
-              value={form.paymentMethod}
-              onChange={(e) =>
-                setForm({ ...form, paymentMethod: e.target.value })
-              }
-              style={inputFull}
-            >
-              <option value="cash">Tiền mặt</option>
-              <option value="bank">Chuyển khoản</option>
-            </select>
-
-            <label>Ghi chú</label>
-            <textarea
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              style={{ ...inputFull, height: 70 }}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
-              <button onClick={saveOrder} style={btnPrimary}>
-                💾 Lưu đơn
-              </button>
-
-              <button onClick={() => setShowForm(false)} style={btn}>
-                Hủy
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-/* STYLE */
-const table = {
+/* ================= STYLE ================= */
+
+const pageStyle = {
+  minHeight: "100vh",
+  padding: 22,
+  background: "#f4f7fb",
+};
+
+const headerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 15,
+  marginBottom: 18,
+};
+
+const descriptionStyle = {
+  margin: "6px 0 0",
+  color: "#6b7280",
+};
+
+const reloadButtonStyle = {
+  padding: "10px 15px",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  background: "#ffffff",
+  cursor: "pointer",
+};
+
+const searchBarStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 14,
+  padding: 14,
+  marginBottom: 18,
+  borderRadius: 12,
+  background: "#ffffff",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.05)",
+};
+
+const searchInputStyle = {
+  width: 420,
+  maxWidth: "100%",
+  padding: "10px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  outline: "none",
+};
+
+const countStyle = {
+  color: "#4b5563",
+};
+
+const mainGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 360px",
+  gap: 18,
+  alignItems: "start",
+};
+
+const tableWrapperStyle = {
+  overflowX: "auto",
+  borderRadius: 12,
+  background: "#ffffff",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.05)",
+};
+
+const tableStyle = {
   width: "100%",
+  minWidth: 1050,
   borderCollapse: "collapse",
-  background: "#fff",
 };
 
-const th = {
-  background: "#2f43a3",
-  color: "white",
-  padding: 10,
+const tableHeaderStyle = {
+  padding: 12,
+  background: "#263b91",
+  color: "#ffffff",
   textAlign: "left",
+  fontSize: 14,
+  whiteSpace: "nowrap",
 };
 
-const td = {
-  padding: 10,
-  borderBottom: "1px solid #ddd",
+const tableCellStyle = {
+  padding: 12,
+  borderBottom: "1px solid #e5e7eb",
+  verticalAlign: "middle",
+  fontSize: 14,
 };
 
-const input = {
-  padding: 8,
-  borderRadius: 6,
-  border: "1px solid #ccc",
-  minWidth: 220,
+const mutedStyle = {
+  color: "#6b7280",
+  fontSize: 13,
 };
 
-const detailBox = {
-  width: 340,
-  background: "#fff",
-  padding: 15,
-  borderRadius: 10,
-  boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+const statusStyle = {
+  display: "inline-block",
+  padding: "5px 9px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 
-const printBtn = {
-  marginTop: 10,
-  padding: "8px 12px",
-  background: "#2f3e9e",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  cursor: "pointer",
-};
-
-const btn = {
-  padding: "8px 12px",
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  cursor: "pointer",
-};
-
-const btnPrimary = {
-  padding: "8px 12px",
-  background: "#2f43a3",
-  color: "white",
-  border: "none",
-  borderRadius: 6,
-  cursor: "pointer",
-};
-
-const modalOverlay = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.45)",
+const actionStyle = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
+  gap: 5,
 };
 
-const modalBox = {
-  width: 760,
-  maxHeight: "90vh",
-  overflowY: "auto",
-  background: "white",
-  padding: 20,
+const commonActionButton = {
+  width: 32,
+  height: 32,
+  border: "none",
+  borderRadius: 7,
+  cursor: "pointer",
+};
+
+const viewButtonStyle = {
+  ...commonActionButton,
+  background: "#dbeafe",
+};
+
+const confirmButtonStyle = {
+  ...commonActionButton,
+  background: "#dcfce7",
+  color: "#166534",
+  fontWeight: 700,
+};
+
+const paidButtonStyle = {
+  ...commonActionButton,
+  background: "#e0e7ff",
+};
+
+const cancelButtonStyle = {
+  ...commonActionButton,
+  background: "#fef3c7",
+  color: "#92400e",
+};
+
+const deleteButtonStyle = {
+  ...commonActionButton,
+  background: "#fee2e2",
+};
+
+const emptyTableStyle = {
+  padding: 35,
+  textAlign: "center",
+  color: "#6b7280",
+};
+
+const detailBoxStyle = {
+  padding: 17,
   borderRadius: 12,
-  boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+  background: "#ffffff",
+  boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+  position: "sticky",
+  top: 15,
 };
 
-const inputFull = {
-  width: "100%",
-  padding: 8,
-  border: "1px solid #ccc",
+const detailHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  marginBottom: 15,
+};
+
+const printButtonStyle = {
+  padding: "8px 11px",
+  border: "none",
+  borderRadius: 7,
+  background: "#263b91",
+  color: "#ffffff",
+  cursor: "pointer",
+};
+
+const emptyDetailStyle = {
+  padding: 25,
+  textAlign: "center",
+  color: "#6b7280",
+  background: "#f9fafb",
+  borderRadius: 9,
+};
+
+const bookingCodeStyle = {
+  padding: 12,
+  marginBottom: 14,
+  borderRadius: 9,
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  textAlign: "center",
+  fontWeight: 800,
+};
+
+const detailItemStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 15,
+  padding: "9px 0",
+  borderBottom: "1px solid #f0f0f0",
+};
+
+const detailLabelStyle = {
+  color: "#6b7280",
+};
+
+const sectionTitleStyle = {
+  margin: "20px 0 10px",
+};
+
+const ticketCardStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: 12,
+  marginBottom: 9,
+  border: "1px solid #e5e7eb",
+  borderRadius: 9,
+};
+
+const ticketCodeStyle = {
+  margin: "4px 0",
+  color: "#6b7280",
+  fontSize: 12,
+};
+
+const checkInButtonStyle = {
+  display: "block",
+  marginTop: 7,
+  padding: "6px 9px",
+  border: "none",
   borderRadius: 6,
-  margin: "6px 0 10px",
+  background: "#2563eb",
+  color: "#ffffff",
+  cursor: "pointer",
+};
+
+const paymentCardStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: 12,
+  marginBottom: 9,
+  borderRadius: 9,
+  background: "#f8fafc",
 };

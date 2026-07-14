@@ -1,397 +1,717 @@
-import { useEffect, useState } from "react";
-import { apiGet, apiCreateFullOrder } from "../services/api";
+import { useEffect, useMemo, useState } from "react";
+import {
+  apiGet,
+  apiGetAvailableSeats,
+  apiCreateFullBooking,
+} from "../services/api";
 
 export default function SalesMulti() {
-  const [products, setProducts] = useState([]);
+  const [trips, setTrips] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [seats, setSeats] = useState([]);
 
-  const [cart, setCart] = useState([]);
-  const [channel, setChannel] = useState("POS");
+  const [tripId, setTripId] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [selectedSeatIds, setSelectedSeatIds] = useState([]);
+
+  const [passengerName, setPassengerName] = useState("");
+  const [passengerPhone, setPassengerPhone] = useState("");
+  const [passengerEmail, setPassengerEmail] = useState("");
+
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [search, setSearch] = useState("");
+  const [paidAmount, setPaidAmount] = useState(0);
   const [note, setNote] = useState("");
 
+  const [loading, setLoading] = useState(false);
+  const [loadingSeats, setLoadingSeats] = useState(false);
+  const [search, setSearch] = useState("");
+
   useEffect(() => {
-    load();
+    loadInitialData();
   }, []);
 
-  const toArray = (res) => {
-    if (Array.isArray(res)) return res;
-    if (Array.isArray(res?.data)) return res.data;
-    return [];
-  };
-
-  const load = async () => {
-    try {
-      const productsData = await apiGet("products");
-      const customersData = await apiGet("customers");
-
-      setProducts(toArray(productsData));
-      setCustomers(toArray(customersData));
-    } catch (error) {
-      console.log("Lỗi tải dữ liệu bán hàng:", error);
-      setProducts([]);
-      setCustomers([]);
+  function toArray(response) {
+    if (Array.isArray(response)) {
+      return response;
     }
-  };
 
-  const formatMoney = (num) =>
-    Number(num || 0).toLocaleString("vi-VN");
+    if (response && Array.isArray(response.data)) {
+      return response.data;
+    }
 
-  const addToCart = (product) => {
-    if (Number(product.stock || 0) <= 0) {
-      alert("Sản phẩm đã hết hàng");
+    return [];
+  }
+
+  async function loadInitialData() {
+    try {
+      setLoading(true);
+
+      const [tripResponse, customerResponse] = await Promise.all([
+        apiGet("trips"),
+        apiGet("customers"),
+      ]);
+
+      setTrips(toArray(tripResponse));
+      setCustomers(toArray(customerResponse));
+    } catch (error) {
+      console.error("Lỗi tải dữ liệu:", error);
+      alert(error.message || "Không tải được dữ liệu TransitGo");
+
+      setTrips([]);
+      setCustomers([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadSeats(selectedTripId) {
+    if (!selectedTripId) {
+      setSeats([]);
+      setSelectedSeatIds([]);
       return;
     }
 
-    setCart((prev) => {
-      const exists = prev.find((item) => item.id === product.id);
+    try {
+      setLoadingSeats(true);
+      setSelectedSeatIds([]);
+
+      const response = await apiGetAvailableSeats(selectedTripId);
+
+      setSeats(toArray(response));
+    } catch (error) {
+      console.error("Lỗi tải ghế:", error);
+      alert(error.message || "Không tải được danh sách ghế");
+
+      setSeats([]);
+    } finally {
+      setLoadingSeats(false);
+    }
+  }
+
+  function handleTripChange(event) {
+    const value = event.target.value;
+
+    setTripId(value);
+    loadSeats(value);
+  }
+
+  function handleCustomerChange(event) {
+    const value = event.target.value;
+
+    setCustomerId(value);
+
+    const customer = customers.find(
+      (item) => Number(item.id) === Number(value)
+    );
+
+    if (customer) {
+      setPassengerName(customer.name || "");
+      setPassengerPhone(customer.phone || "");
+      setPassengerEmail(customer.email || "");
+    }
+  }
+
+  function toggleSeat(seat) {
+    const isAvailable =
+      seat.is_available === true ||
+      seat.is_available === "true";
+
+    if (!isAvailable) {
+      return;
+    }
+
+    setSelectedSeatIds((previous) => {
+      const exists = previous.includes(Number(seat.id));
 
       if (exists) {
-        if (Number(exists.qty) + 1 > Number(product.stock || 0)) {
-          alert("Số lượng vượt quá tồn kho");
-          return prev;
-        }
-
-        return prev.map((item) =>
-          item.id === product.id
-            ? { ...item, qty: Number(item.qty) + 1 }
-            : item
+        return previous.filter(
+          (seatId) => seatId !== Number(seat.id)
         );
       }
 
-      return [
-        ...prev,
-        {
-          id: product.id,
-          name: product.name,
-          price: Number(product.price || 0),
-          stock: Number(product.stock || 0),
-          unit: product.unit || "Cái",
-          qty: 1,
-        },
-      ];
+      return [...previous, Number(seat.id)];
     });
-  };
+  }
 
-  const updateQty = (productId, qty) => {
-    const value = Number(qty);
+  function formatMoney(value) {
+    return Number(value || 0).toLocaleString("vi-VN");
+  }
 
-    if (value <= 0) {
-      removeFromCart(productId);
-      return;
+  function formatDateTime(value) {
+    if (!value) {
+      return "Chưa xác định";
     }
 
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.id !== productId) return item;
+    return new Date(value).toLocaleString("vi-VN");
+  }
 
-        if (value > Number(item.stock || 0)) {
-          alert("Số lượng vượt quá tồn kho");
-          return item;
-        }
-
-        return {
-          ...item,
-          qty: value,
-        };
-      })
+  const selectedTrip = useMemo(() => {
+    return trips.find(
+      (trip) => Number(trip.id) === Number(tripId)
     );
-  };
+  }, [trips, tripId]);
 
-  const updatePrice = (productId, price) => {
-    setCart((prev) =>
-      prev.map((item) =>
-        item.id === productId
-          ? { ...item, price: Number(price || 0) }
-          : item
-      )
-    );
-  };
+  const ticketPrice = Number(
+    selectedTrip ? selectedTrip.ticket_price || 0 : 0
+  );
 
-  const removeFromCart = (productId) => {
-    setCart((prev) => prev.filter((item) => item.id !== productId));
-  };
+  const totalAmount =
+    ticketPrice * selectedSeatIds.length;
 
-  const clearCart = () => {
-    if (!cart.length) return;
-    if (!window.confirm("Xóa toàn bộ giỏ hàng?")) return;
-
-    setCart([]);
-    setPaidAmount(0);
-    setNote("");
-  };
-
-  const total = cart.reduce(
-    (sum, item) => sum + Number(item.price || 0) * Number(item.qty || 0),
+  const remainingAmount = Math.max(
+    totalAmount - Number(paidAmount || 0),
     0
   );
 
-  const debtAmount = Math.max(total - Number(paidAmount || 0), 0);
+  const selectedSeats = seats.filter((seat) =>
+    selectedSeatIds.includes(Number(seat.id))
+  );
 
-  const filteredProducts = products.filter((product) => {
-    const text = `${product.name || ""} ${product.sku || ""}`.toLowerCase();
+  const filteredTrips = trips.filter((trip) => {
+    const text = [
+      trip.code,
+      trip.route_name,
+      trip.departure_station_name,
+      trip.arrival_station_name,
+      trip.license_plate,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
     return text.includes(search.toLowerCase());
   });
 
-  const checkout = async () => {
-    if (!customerId) {
-      alert("Vui lòng chọn khách hàng");
+  async function createBooking() {
+    if (!tripId) {
+      alert("Vui lòng chọn chuyến xe");
       return;
     }
 
-    if (!cart.length) {
-      alert("Chưa có sản phẩm trong giỏ hàng");
+    if (!passengerName.trim()) {
+      alert("Vui lòng nhập tên hành khách");
+      return;
+    }
+
+    if (!passengerPhone.trim()) {
+      alert("Vui lòng nhập số điện thoại");
+      return;
+    }
+
+    if (selectedSeatIds.length === 0) {
+      alert("Vui lòng chọn ít nhất một ghế");
+      return;
+    }
+
+    if (Number(paidAmount || 0) > totalAmount) {
+      alert("Số tiền thanh toán không được lớn hơn tổng tiền");
       return;
     }
 
     const payload = {
-      customerId: Number(customerId),
-      channel,
-      paidAmount: Number(paidAmount || 0),
+      customerId: customerId ? Number(customerId) : null,
+      tripId: Number(tripId),
+
+      passengerName: passengerName.trim(),
+      passengerPhone: passengerPhone.trim(),
+      passengerEmail: passengerEmail.trim() || null,
+
+      seatIds: selectedSeatIds,
+
       paymentMethod,
-      note,
-      items: cart.map((item) => ({
-        productId: Number(item.id),
-        quantity: Number(item.qty),
-        price: Number(item.price),
-      })),
+      paidAmount: Number(paidAmount || 0),
+      note: note.trim(),
     };
 
     try {
-      const res = await apiCreateFullOrder(payload);
+      setLoading(true);
 
-      if (res?.data) {
-        alert("✅ Thanh toán thành công, đã tạo đơn hàng");
+      const response = await apiCreateFullBooking(payload);
 
-        setCart([]);
-        setPaidAmount(0);
-        setNote("");
+      alert(
+        response.message ||
+          "Đặt vé thành công"
+      );
 
-        await load();
-      } else {
-        alert(res?.message || "❌ Lỗi tạo đơn hàng");
-      }
+      setCustomerId("");
+      setPassengerName("");
+      setPassengerPhone("");
+      setPassengerEmail("");
+      setSelectedSeatIds([]);
+      setPaidAmount(0);
+      setNote("");
+
+      await loadSeats(tripId);
+      await loadInitialData();
     } catch (error) {
-      console.log("Lỗi thanh toán:", error);
-      alert("❌ Lỗi thanh toán");
+      console.error("Lỗi tạo đặt vé:", error);
+
+      alert(
+        error.message ||
+          "Không thể tạo đặt vé"
+      );
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <div style={page}>
-      <div style={header}>
+    <div style={pageStyle}>
+      <div style={headerStyle}>
         <div>
-          <h2 style={{ margin: 0 }}>🛒 Bán hàng đa kênh</h2>
-          <p style={{ margin: "6px 0 0", color: "#6b7280" }}>
-            Tạo đơn nhanh, trừ kho tự động, ghi quỹ tiền và công nợ khách hàng.
+          <h2 style={{ margin: 0 }}>
+            🎫 Đặt vé xe buýt
+          </h2>
+
+          <p style={descriptionStyle}>
+            Chọn chuyến xe, hành khách, ghế ngồi và tạo vé
+            TransitGo.
           </p>
         </div>
 
-        <button onClick={load} style={reloadBtn}>
-          ⟳ Tải lại
+        <button
+          type="button"
+          onClick={loadInitialData}
+          style={reloadButtonStyle}
+          disabled={loading}
+        >
+          {loading ? "Đang tải..." : "⟳ Tải lại"}
         </button>
       </div>
 
-      <div style={topGrid}>
-        <div style={controlCard}>
-          <label style={label}>Kênh bán</label>
-          <select
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-            style={input}
-          >
-            <option value="POS">POS</option>
-            <option value="Facebook">Facebook</option>
-            <option value="Shopee">Shopee</option>
-            <option value="TikTok">TikTok</option>
-          </select>
-        </div>
+      <div style={mainGridStyle}>
+        {/* CỘT TRÁI */}
+        <div style={leftColumnStyle}>
+          <div style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  1. Chọn chuyến xe
+                </h3>
 
-        <div style={controlCard}>
-          <label style={label}>Khách hàng</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            style={input}
-          >
-            <option value="">-- Chọn khách hàng --</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name} - {customer.phone}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={controlCard}>
-          <label style={label}>Phương thức thanh toán</label>
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            style={input}
-          >
-            <option value="cash">Tiền mặt</option>
-            <option value="bank">Chuyển khoản</option>
-          </select>
-        </div>
-      </div>
-
-      <div style={mainGrid}>
-        {/* LEFT */}
-        <div style={productSection}>
-          <div style={sectionHeader}>
-            <h3 style={{ margin: 0 }}>Sản phẩm</h3>
-
-            <input
-              placeholder="🔍 Tìm sản phẩm..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={searchInput}
-            />
-          </div>
-
-          <div style={productGrid}>
-            {filteredProducts.map((product) => {
-              const stock = Number(product.stock || 0);
-              const isOut = stock <= 0;
-
-              return (
-                <div key={product.id} style={productCard}>
-                  <div>
-                    <h4 style={productName}>{product.name}</h4>
-                    <p style={muted}>Mã: {product.sku || "Chưa có"}</p>
-                    <p style={muted}>ĐVT: {product.unit || "Cái"}</p>
-                  </div>
-
-                  <div style={productBottom}>
-                    <div>
-                      <b style={{ color: "#1d4ed8" }}>
-                        {formatMoney(product.price)} đ
-                      </b>
-                      <p
-                        style={{
-                          margin: "4px 0 0",
-                          color: isOut ? "#dc2626" : "#16a34a",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Tồn: {stock}
-                      </p>
-                    </div>
-
-                    <button
-                      disabled={isOut}
-                      onClick={() => addToCart(product)}
-                      style={{
-                        ...addBtn,
-                        opacity: isOut ? 0.5 : 1,
-                        cursor: isOut ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      + Thêm
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            {filteredProducts.length === 0 && (
-              <div style={emptyBox}>Chưa có sản phẩm hoặc không tìm thấy</div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT */}
-        <div style={cartSection}>
-          <div style={sectionHeader}>
-            <h3 style={{ margin: 0 }}>Giỏ hàng</h3>
-            <button onClick={clearCart} style={clearBtn}>
-              Xóa giỏ
-            </button>
-          </div>
-
-          {cart.length === 0 && (
-            <div style={emptyCart}>Chưa có sản phẩm trong giỏ</div>
-          )}
-
-          {cart.map((item) => (
-            <div key={item.id} style={cartItem}>
-              <div style={{ flex: 1 }}>
-                <b>{item.name}</b>
-                <p style={muted}>
-                  Tồn: {item.stock} | ĐVT: {item.unit}
+                <p style={sectionDescriptionStyle}>
+                  Chọn chuyến xe cần đặt vé.
                 </p>
-
-                <div style={cartInputs}>
-                  <input
-                    type="number"
-                    value={item.qty}
-                    min="1"
-                    onChange={(e) => updateQty(item.id, e.target.value)}
-                    style={smallInput}
-                  />
-
-                  <input
-                    type="number"
-                    value={item.price}
-                    onChange={(e) => updatePrice(item.id, e.target.value)}
-                    style={priceInput}
-                  />
-                </div>
               </div>
 
-              <div style={{ textAlign: "right" }}>
-                <b>
-                  {formatMoney(Number(item.qty) * Number(item.price))} đ
-                </b>
-
-                <br />
-
-                <button
-                  onClick={() => removeFromCart(item.id)}
-                  style={removeBtn}
-                >
-                  Xóa
-                </button>
-              </div>
-            </div>
-          ))}
-
-          <div style={summaryBox}>
-            <div style={summaryRow}>
-              <span>Tổng tiền</span>
-              <b>{formatMoney(total)} đ</b>
-            </div>
-
-            <div style={summaryRow}>
-              <span>Khách đã trả</span>
               <input
-                type="number"
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(e.target.value)}
-                style={paidInput}
+                type="text"
+                placeholder="Tìm mã chuyến, tuyến xe..."
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
+                style={searchInputStyle}
               />
             </div>
 
-            <div style={summaryRow}>
-              <span>Còn nợ</span>
-              <b style={{ color: debtAmount > 0 ? "#dc2626" : "#16a34a" }}>
-                {formatMoney(debtAmount)} đ
-              </b>
+            <select
+              value={tripId}
+              onChange={handleTripChange}
+              style={inputStyle}
+            >
+              <option value="">
+                -- Chọn chuyến xe --
+              </option>
+
+              {filteredTrips.map((trip) => (
+                <option
+                  key={trip.id}
+                  value={trip.id}
+                >
+                  {trip.code || `Chuyến #${trip.id}`}
+                  {" - "}
+                  {trip.route_name || `Tuyến #${trip.route_id}`}
+                  {" - "}
+                  {formatDateTime(trip.departure_time)}
+                </option>
+              ))}
+            </select>
+
+            {selectedTrip && (
+              <div style={tripInformationStyle}>
+                <div style={informationItemStyle}>
+                  <span style={informationLabelStyle}>
+                    Mã chuyến
+                  </span>
+
+                  <strong>
+                    {selectedTrip.code ||
+                      `#${selectedTrip.id}`}
+                  </strong>
+                </div>
+
+                <div style={informationItemStyle}>
+                  <span style={informationLabelStyle}>
+                    Giờ khởi hành
+                  </span>
+
+                  <strong>
+                    {formatDateTime(
+                      selectedTrip.departure_time
+                    )}
+                  </strong>
+                </div>
+
+                <div style={informationItemStyle}>
+                  <span style={informationLabelStyle}>
+                    Giá vé
+                  </span>
+
+                  <strong style={{ color: "#2563eb" }}>
+                    {formatMoney(ticketPrice)} đ
+                  </strong>
+                </div>
+
+                <div style={informationItemStyle}>
+                  <span style={informationLabelStyle}>
+                    Ghế còn lại
+                  </span>
+
+                  <strong>
+                    {selectedTrip.available_seats || 0}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  2. Chọn ghế
+                </h3>
+
+                <p style={sectionDescriptionStyle}>
+                  Màu xanh là ghế đang chọn, màu xám là ghế
+                  đã được đặt.
+                </p>
+              </div>
             </div>
 
-            <textarea
-              placeholder="Ghi chú đơn hàng..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              style={noteInput}
+            {!tripId && (
+              <div style={emptyStyle}>
+                Vui lòng chọn chuyến xe trước
+              </div>
+            )}
+
+            {tripId && loadingSeats && (
+              <div style={emptyStyle}>
+                Đang tải danh sách ghế...
+              </div>
+            )}
+
+            {tripId &&
+              !loadingSeats &&
+              seats.length === 0 && (
+                <div style={emptyStyle}>
+                  Chuyến xe chưa có ghế hoặc chưa được gán xe
+                  buýt
+                </div>
+              )}
+
+            {tripId &&
+              !loadingSeats &&
+              seats.length > 0 && (
+                <>
+                  <div style={driverAreaStyle}>
+                    🚌 Phía trước xe
+                  </div>
+
+                  <div style={seatGridStyle}>
+                    {seats.map((seat) => {
+                      const isAvailable =
+                        seat.is_available === true ||
+                        seat.is_available === "true";
+
+                      const isSelected =
+                        selectedSeatIds.includes(
+                          Number(seat.id)
+                        );
+
+                      return (
+                        <button
+                          type="button"
+                          key={seat.id}
+                          disabled={!isAvailable}
+                          onClick={() =>
+                            toggleSeat(seat)
+                          }
+                          style={{
+                            ...seatButtonStyle,
+
+                            background: !isAvailable
+                              ? "#d1d5db"
+                              : isSelected
+                              ? "#2563eb"
+                              : "#ffffff",
+
+                            color:
+                              isSelected && isAvailable
+                                ? "#ffffff"
+                                : "#111827",
+
+                            borderColor: isSelected
+                              ? "#2563eb"
+                              : "#d1d5db",
+
+                            cursor: isAvailable
+                              ? "pointer"
+                              : "not-allowed",
+                          }}
+                        >
+                          {seat.seat_number}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div style={seatLegendStyle}>
+                    <span style={legendItemStyle}>
+                      <span
+                        style={{
+                          ...legendColorStyle,
+                          background: "#ffffff",
+                        }}
+                      />
+                      Ghế trống
+                    </span>
+
+                    <span style={legendItemStyle}>
+                      <span
+                        style={{
+                          ...legendColorStyle,
+                          background: "#2563eb",
+                        }}
+                      />
+                      Đang chọn
+                    </span>
+
+                    <span style={legendItemStyle}>
+                      <span
+                        style={{
+                          ...legendColorStyle,
+                          background: "#d1d5db",
+                        }}
+                      />
+                      Đã đặt
+                    </span>
+                  </div>
+                </>
+              )}
+          </div>
+        </div>
+
+        {/* CỘT PHẢI */}
+        <div style={rightColumnStyle}>
+          <div style={cardStyle}>
+            <h3 style={{ marginTop: 0 }}>
+              3. Thông tin hành khách
+            </h3>
+
+            <label style={labelStyle}>
+              Khách hàng có sẵn
+            </label>
+
+            <select
+              value={customerId}
+              onChange={handleCustomerChange}
+              style={inputStyle}
+            >
+              <option value="">
+                -- Khách lẻ hoặc chọn khách hàng --
+              </option>
+
+              {customers.map((customer) => (
+                <option
+                  key={customer.id}
+                  value={customer.id}
+                >
+                  {customer.name}
+                  {customer.phone
+                    ? ` - ${customer.phone}`
+                    : ""}
+                </option>
+              ))}
+            </select>
+
+            <label style={labelStyle}>
+              Họ và tên
+            </label>
+
+            <input
+              type="text"
+              value={passengerName}
+              onChange={(event) =>
+                setPassengerName(event.target.value)
+              }
+              placeholder="Nhập tên hành khách"
+              style={inputStyle}
             />
 
-            <button onClick={checkout} style={checkoutBtn}>
-              Thanh toán / Tạo đơn
+            <label style={labelStyle}>
+              Số điện thoại
+            </label>
+
+            <input
+              type="text"
+              value={passengerPhone}
+              onChange={(event) =>
+                setPassengerPhone(event.target.value)
+              }
+              placeholder="Nhập số điện thoại"
+              style={inputStyle}
+            />
+
+            <label style={labelStyle}>
+              Email
+            </label>
+
+            <input
+              type="email"
+              value={passengerEmail}
+              onChange={(event) =>
+                setPassengerEmail(event.target.value)
+              }
+              placeholder="Nhập email, không bắt buộc"
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={cardStyle}>
+            <h3 style={{ marginTop: 0 }}>
+              4. Thanh toán
+            </h3>
+
+            <label style={labelStyle}>
+              Phương thức thanh toán
+            </label>
+
+            <select
+              value={paymentMethod}
+              onChange={(event) =>
+                setPaymentMethod(event.target.value)
+              }
+              style={inputStyle}
+            >
+              <option value="cash">
+                Tiền mặt
+              </option>
+
+              <option value="bank_transfer">
+                Chuyển khoản
+              </option>
+
+              <option value="momo">
+                MoMo
+              </option>
+
+              <option value="vnpay">
+                VNPay
+              </option>
+
+              <option value="zalopay">
+                ZaloPay
+              </option>
+            </select>
+
+            <div style={summaryStyle}>
+              <div style={summaryRowStyle}>
+                <span>Ghế đã chọn</span>
+
+                <strong>
+                  {selectedSeats.length > 0
+                    ? selectedSeats
+                        .map((seat) => seat.seat_number)
+                        .join(", ")
+                    : "Chưa chọn"}
+                </strong>
+              </div>
+
+              <div style={summaryRowStyle}>
+                <span>Số lượng vé</span>
+
+                <strong>
+                  {selectedSeatIds.length}
+                </strong>
+              </div>
+
+              <div style={summaryRowStyle}>
+                <span>Giá mỗi vé</span>
+
+                <strong>
+                  {formatMoney(ticketPrice)} đ
+                </strong>
+              </div>
+
+              <div style={totalRowStyle}>
+                <span>Tổng tiền</span>
+
+                <strong>
+                  {formatMoney(totalAmount)} đ
+                </strong>
+              </div>
+            </div>
+
+            <label style={labelStyle}>
+              Khách thanh toán
+            </label>
+
+            <input
+              type="number"
+              min="0"
+              max={totalAmount}
+              value={paidAmount}
+              onChange={(event) =>
+                setPaidAmount(event.target.value)
+              }
+              style={inputStyle}
+            />
+
+            <div style={remainingStyle}>
+              <span>Còn lại</span>
+
+              <strong
+                style={{
+                  color:
+                    remainingAmount > 0
+                      ? "#dc2626"
+                      : "#16a34a",
+                }}
+              >
+                {formatMoney(remainingAmount)} đ
+              </strong>
+            </div>
+
+            <label style={labelStyle}>
+              Ghi chú
+            </label>
+
+            <textarea
+              value={note}
+              onChange={(event) =>
+                setNote(event.target.value)
+              }
+              placeholder="Ghi chú đặt vé..."
+              style={textareaStyle}
+            />
+
+            <button
+              type="button"
+              onClick={createBooking}
+              disabled={loading}
+              style={{
+                ...createButtonStyle,
+                opacity: loading ? 0.6 : 1,
+                cursor: loading
+                  ? "not-allowed"
+                  : "pointer",
+              }}
+            >
+              {loading
+                ? "Đang tạo vé..."
+                : "🎫 Xác nhận đặt vé"}
             </button>
           </div>
         </div>
@@ -400,233 +720,232 @@ export default function SalesMulti() {
   );
 }
 
-/* STYLE */
-const page = {
+/* ================= STYLE ================= */
+
+const pageStyle = {
+  minHeight: "100vh",
   padding: 24,
   background: "#f4f7fb",
-  minHeight: "100vh",
 };
 
-const header = {
+const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: 18,
+  gap: 16,
+  marginBottom: 20,
 };
 
-const reloadBtn = {
-  padding: "9px 14px",
+const descriptionStyle = {
+  margin: "6px 0 0",
+  color: "#6b7280",
+};
+
+const reloadButtonStyle = {
+  padding: "10px 16px",
   border: "1px solid #d1d5db",
-  borderRadius: 8,
-  background: "white",
+  borderRadius: 9,
+  background: "#ffffff",
   cursor: "pointer",
 };
 
-const topGrid = {
+const mainGridStyle = {
   display: "grid",
-  gridTemplateColumns: "1fr 1.5fr 1fr",
-  gap: 14,
-  marginBottom: 18,
-};
-
-const controlCard = {
-  background: "white",
-  padding: 14,
-  borderRadius: 12,
-  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-};
-
-const label = {
-  display: "block",
-  fontWeight: 700,
-  marginBottom: 8,
-};
-
-const input = {
-  width: "100%",
-  padding: 9,
-  border: "1px solid #d1d5db",
-  borderRadius: 8,
-};
-
-const mainGrid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 420px",
-  gap: 18,
+  gridTemplateColumns: "minmax(0, 1fr) 420px",
+  gap: 20,
   alignItems: "start",
 };
 
-const productSection = {
-  background: "white",
-  padding: 16,
-  borderRadius: 14,
-  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+const leftColumnStyle = {
+  display: "grid",
+  gap: 20,
 };
 
-const cartSection = {
-  background: "white",
-  padding: 16,
-  borderRadius: 14,
-  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+const rightColumnStyle = {
+  display: "grid",
+  gap: 20,
   position: "sticky",
-  top: 12,
+  top: 16,
 };
 
-const sectionHeader = {
+const cardStyle = {
+  padding: 18,
+  borderRadius: 14,
+  background: "#ffffff",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+};
+
+const sectionHeaderStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: 12,
+  gap: 14,
+  marginBottom: 16,
+};
+
+const sectionDescriptionStyle = {
+  margin: "5px 0 0",
+  color: "#6b7280",
+  fontSize: 14,
+};
+
+const searchInputStyle = {
+  width: 260,
+  padding: "10px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 9,
+  outline: "none",
+};
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "10px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 9,
+  outline: "none",
+  background: "#ffffff",
   marginBottom: 14,
 };
 
-const searchInput = {
-  padding: 9,
-  border: "1px solid #d1d5db",
-  borderRadius: 8,
-  width: 260,
+const labelStyle = {
+  display: "block",
+  marginBottom: 7,
+  fontWeight: 600,
+  color: "#374151",
 };
 
-const productGrid = {
+const tripInformationStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
-  gap: 14,
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 12,
+  marginTop: 6,
 };
 
-const productCard = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: 14,
-  background: "#ffffff",
+const informationItemStyle = {
   display: "flex",
   flexDirection: "column",
-  justifyContent: "space-between",
-  minHeight: 165,
+  gap: 6,
+  padding: 12,
+  borderRadius: 10,
+  background: "#f8fafc",
 };
 
-const productName = {
-  margin: "0 0 6px",
-  fontSize: 16,
-};
-
-const muted = {
-  margin: "3px 0",
+const informationLabelStyle = {
   color: "#6b7280",
   fontSize: 13,
 };
 
-const productBottom = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginTop: 12,
-};
-
-const addBtn = {
-  background: "#2f43a3",
-  color: "white",
-  border: "none",
-  padding: "8px 12px",
-  borderRadius: 8,
-};
-
-const emptyBox = {
-  gridColumn: "1 / -1",
-  padding: 30,
+const driverAreaStyle = {
+  width: 180,
+  margin: "0 auto 20px",
+  padding: "12px 16px",
+  borderRadius: 12,
   textAlign: "center",
-  color: "#6b7280",
+  background: "#e0e7ff",
+  color: "#3730a3",
+  fontWeight: 700,
 };
 
-const emptyCart = {
-  padding: 24,
+const seatGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 58px)",
+  justifyContent: "center",
+  gap: 14,
+};
+
+const seatButtonStyle = {
+  width: 58,
+  height: 48,
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  fontWeight: 700,
+};
+
+const seatLegendStyle = {
+  display: "flex",
+  justifyContent: "center",
+  flexWrap: "wrap",
+  gap: 20,
+  marginTop: 22,
+};
+
+const legendItemStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  fontSize: 14,
+  color: "#4b5563",
+};
+
+const legendColorStyle = {
+  width: 18,
+  height: 18,
+  border: "1px solid #d1d5db",
+  borderRadius: 5,
+};
+
+const emptyStyle = {
+  padding: 34,
   textAlign: "center",
   color: "#6b7280",
   background: "#f9fafb",
+  borderRadius: 12,
+};
+
+const summaryStyle = {
+  padding: 14,
+  marginBottom: 15,
   borderRadius: 10,
+  background: "#f8fafc",
 };
 
-const cartItem = {
-  display: "flex",
-  gap: 12,
-  padding: "12px 0",
-  borderBottom: "1px solid #e5e7eb",
-};
-
-const cartInputs = {
-  display: "flex",
-  gap: 8,
-  marginTop: 8,
-};
-
-const smallInput = {
-  width: 70,
-  padding: 7,
-  border: "1px solid #d1d5db",
-  borderRadius: 6,
-};
-
-const priceInput = {
-  width: 120,
-  padding: 7,
-  border: "1px solid #d1d5db",
-  borderRadius: 6,
-};
-
-const removeBtn = {
-  marginTop: 8,
-  background: "#ef4444",
-  color: "white",
-  border: "none",
-  padding: "5px 9px",
-  borderRadius: 6,
-  cursor: "pointer",
-};
-
-const clearBtn = {
-  background: "#f3f4f6",
-  border: "1px solid #d1d5db",
-  borderRadius: 8,
-  padding: "7px 10px",
-  cursor: "pointer",
-};
-
-const summaryBox = {
-  marginTop: 16,
-  paddingTop: 14,
-  borderTop: "2px solid #e5e7eb",
-};
-
-const summaryRow = {
+const summaryRowStyle = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 12,
+  gap: 16,
+  padding: "7px 0",
 };
 
-const paidInput = {
-  width: 150,
-  padding: 8,
-  border: "1px solid #d1d5db",
+const totalRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  paddingTop: 12,
+  marginTop: 7,
+  borderTop: "1px solid #d1d5db",
+  color: "#1d4ed8",
+  fontSize: 18,
+};
+
+const remainingStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  marginBottom: 14,
+  padding: "10px 12px",
   borderRadius: 8,
-  textAlign: "right",
+  background: "#f9fafb",
 };
 
-const noteInput = {
+const textareaStyle = {
   width: "100%",
-  height: 70,
-  padding: 9,
+  boxSizing: "border-box",
+  minHeight: 80,
+  resize: "vertical",
+  padding: "10px 12px",
   border: "1px solid #d1d5db",
-  borderRadius: 8,
-  marginBottom: 12,
+  borderRadius: 9,
+  outline: "none",
+  marginBottom: 14,
 };
 
-const checkoutBtn = {
+const createButtonStyle = {
   width: "100%",
-  padding: 12,
-  background: "#16a34a",
-  color: "white",
+  padding: 13,
   border: "none",
   borderRadius: 10,
+  background: "#16a34a",
+  color: "#ffffff",
+  fontSize: 16,
   fontWeight: 700,
-  cursor: "pointer",
 };
