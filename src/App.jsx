@@ -74,22 +74,26 @@ import Shifts from "./pages/Shifts";
 // CHANNEL
 import Channels from "./pages/Channels";
 
+// USER PUBLIC
+import UserHome from "./pages/user/UserHome";
+import UserSearchTrips from "./pages/user/UserSearchTrips";
+import UserBooking from "./pages/user/UserBooking";
+import UserTicketLookup from "./pages/user/UserTicketLookup";
+import UserLogin from "./pages/user/UserLogin";
+import UserRegister from "./pages/user/UserRegister";
+
 function getUserFromLocalStorage() {
   const token = localStorage.getItem("token");
   const storedUser = localStorage.getItem("user");
 
-  if (!token || !storedUser) {
-    return null;
-  }
+  if (!token || !storedUser) return null;
 
   try {
     return JSON.parse(storedUser);
   } catch (error) {
     console.error("Dữ liệu user không hợp lệ:", error);
-
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
     return null;
   }
 }
@@ -103,23 +107,30 @@ export default function App() {
 }
 
 function AppRoutes() {
-  // Giúp App render lại khi chuyển trang
   useLocation();
 
   const user = getUserFromLocalStorage();
 
   return (
     <Routes>
-      {/* LOGIN */}
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/dashboard" replace /> : <Login />}
-      />
+      {/* USER */}
+      <Route path="/" element={<UserHome />} />
+      <Route path="/user" element={<UserHome />} />
+      <Route path="/user/login" element={<UserLogin />} />
+      <Route path="/user/register" element={<UserRegister />} />
+      <Route path="/user/search" element={<UserSearchTrips />} />
+      <Route path="/user/booking/:tripId" element={<UserBooking />} />
+      <Route path="/user/my-ticket" element={<UserTicketLookup />} />
 
-      {/* PRIVATE AREA */}
+      {/* ADMIN LOGIN */}
+      <Route path="/login" element={<Login />} />
+
+      {/* ADMIN PRIVATE */}
       <Route
         path="/*"
-        element={user ? <Layout user={user} /> : <Navigate to="/login" replace />}
+        element={
+          user ? <Layout user={user} /> : <Navigate to="/login" replace />
+        }
       />
     </Routes>
   );
@@ -154,79 +165,59 @@ function Layout({ user }) {
           }}
         >
           <Routes>
-            {/* DASHBOARD */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* ĐẶT VÉ */}
             <Route path="/bookings" element={<BookingList />} />
             <Route path="/tickets" element={<Tickets />} />
             <Route path="/payments" element={<Payments />} />
 
-            {/* CHUYẾN XE */}
             <Route path="/trips" element={<Trips />} />
             <Route path="/routes" element={<RoutesPage />} />
             <Route path="/route-stops" element={<RouteStops />} />
 
-            {/* BẾN VÀ TRẠM */}
             <Route path="/stations" element={<Stations />} />
             <Route path="/bus-stops" element={<BusStops />} />
 
-            {/* PHƯƠNG TIỆN */}
             <Route path="/buses" element={<Buses />} />
             <Route path="/bus-types" element={<BusTypes />} />
             <Route path="/bus-seats" element={<BusSeats />} />
             <Route path="/maintenance" element={<Maintenance />} />
 
-            {/* SALES / BÁO CÁO */}
             <Route path="/sales" element={<Sales />} />
             <Route path="/multi-sales" element={<SalesMulti />} />
             <Route path="/orders" element={<Orders />} />
 
-            {/* PURCHASE */}
             <Route path="/purchase" element={<Purchases />} />
 
-            {/* INVENTORY */}
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/products" element={<Products />} />
 
-            {/* TÀI XẾ */}
             <Route path="/drivers" element={<Drivers />} />
-
-            {/* ĐÁNH GIÁ */}
             <Route path="/reviews" element={<Reviews />} />
-
-            {/* THÔNG BÁO */}
             <Route path="/notifications" element={<Notifications />} />
 
-            {/* HỆ THỐNG */}
             <Route path="/users" element={<Users />} />
             <Route path="/settings" element={<Settings />} />
 
-            {/* FINANCE */}
             <Route path="/cash" element={<Cashbook />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/profit" element={<Profit />} />
             <Route path="/debts" element={<Debts />} />
 
-            {/* CATEGORY */}
             <Route path="/product-groups" element={<ProductGroups />} />
             <Route path="/units" element={<Units />} />
             <Route path="/price-list" element={<PriceList />} />
 
-            {/* CUSTOMER */}
             <Route path="/customers" element={<Customers />} />
             <Route path="/customer-groups" element={<CustomerGroups />} />
             <Route path="/membership" element={<Membership />} />
 
-            {/* STAFF */}
             <Route path="/staff" element={<Staff />} />
             <Route path="/shifts" element={<Shifts />} />
 
-            {/* CHANNEL */}
             <Route path="/channels" element={<Channels />} />
 
-            {/* 404 */}
             <Route
               path="*"
               element={

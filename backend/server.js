@@ -9,6 +9,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.status(200).send("TransitGo Backend OK");
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "Backend đang chạy",
+    time: new Date().toISOString(),
+  });
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || "transitgo_secret_key";
 
 // ================= AUTH MIDDLEWARE =================
@@ -1081,8 +1093,20 @@ app.use((req, res) => {
 // ================= START SERVER =================
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, async () => {
-  await ensureLocalColumns();
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION:", err);
+});
+
+app.listen(PORT, "0.0.0.0", async () => {
+  try {
+    await ensureLocalColumns();
+  } catch (error) {
+    console.log("Lỗi ensureLocalColumns:", error.message);
+  }
 
   console.log(`TransitGo Backend running at http://localhost:${PORT}`);
   console.log("Admin mặc định: admin@transitgo.com / 123456");
