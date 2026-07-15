@@ -16,17 +16,17 @@ export default function RouteStops() {
   });
 
   useEffect(() => {
-    loadStops();
     loadRoutes();
+    loadStops();
   }, []);
 
-  const toArray = (res) => {
+  function toArray(res) {
     if (Array.isArray(res)) return res;
-    if (Array.isArray(res?.data)) return res.data;
+    if (res && Array.isArray(res.data)) return res.data;
     return [];
-  };
+  }
 
-  const loadStops = async () => {
+  async function loadStops() {
     try {
       const res = await apiGet("routeStops");
       setStops(toArray(res));
@@ -34,9 +34,9 @@ export default function RouteStops() {
       console.log("Lỗi tải điểm dừng tuyến:", error);
       setStops([]);
     }
-  };
+  }
 
-  const loadRoutes = async () => {
+  async function loadRoutes() {
     try {
       const res = await apiGet("routes");
       setRoutes(toArray(res));
@@ -44,15 +44,23 @@ export default function RouteStops() {
       console.log("Lỗi tải tuyến:", error);
       setRoutes([]);
     }
-  };
+  }
 
-  const getRouteName = (routeId) => {
+  function getRouteName(routeId) {
     const route = routes.find((r) => String(r.id) === String(routeId));
-    return route?.name || route?.route_name || "—";
-  };
 
-  const resetForm = () => {
+    return (
+      route?.name ||
+      route?.route_name ||
+      route?.route_code ||
+      route?.code ||
+      "—"
+    );
+  }
+
+  function resetForm() {
     setEditing(null);
+
     setForm({
       route_id: "",
       stop_name: "",
@@ -60,16 +68,56 @@ export default function RouteStops() {
       stop_order: "",
       note: "",
     });
-  };
+  }
 
-  const saveStop = async () => {
-    if (!form.route_id) return alert("Chọn tuyến đường");
-    if (!form.stop_name.trim()) return alert("Nhập tên điểm dừng");
+  async function saveStop() {
+    if (!form.route_id) {
+      alert("Chọn tuyến đường");
+      return;
+    }
+
+    if (!form.stop_name.trim()) {
+      alert("Nhập tên điểm dừng");
+      return;
+    }
+
+    const selectedRoute = routes.find(
+      (r) => String(r.id) === String(form.route_id)
+    );
+
+    const routeName =
+      selectedRoute?.name ||
+      selectedRoute?.route_name ||
+      selectedRoute?.route_code ||
+      selectedRoute?.code ||
+      "";
+
+    const stopName = form.stop_name.trim();
+    const address = form.address.trim();
+    const stopOrder = Number(form.stop_order || 0);
 
     const payload = {
-      ...form,
       route_id: Number(form.route_id),
-      stop_order: Number(form.stop_order || 0),
+      route_name: routeName,
+
+      stop_name: stopName,
+      station_name: stopName,
+      name: stopName,
+      bus_stop_name: stopName,
+
+      address: address,
+      location: address,
+
+      stop_order: stopOrder,
+      sort_order: stopOrder,
+      order_number: stopOrder,
+
+      note: form.note.trim(),
+
+      // phòng trường hợp bảng cũ có các cột này
+      bus_stop_id: null,
+      station_id: null,
+      stop_id: null,
     };
 
     try {
@@ -82,40 +130,56 @@ export default function RouteStops() {
       }
 
       resetForm();
-      loadStops();
+      await loadStops();
     } catch (error) {
+      console.log("Lỗi lưu điểm dừng:", error);
       alert(error.message || "Lỗi lưu điểm dừng");
     }
-  };
+  }
 
-  const editStop = (item) => {
+  function editStop(item) {
     setEditing(item);
+
     setForm({
       route_id: item.route_id || "",
-      stop_name: item.stop_name || item.name || "",
-      address: item.address || "",
-      stop_order: item.stop_order || "",
+      stop_name:
+        item.stop_name ||
+        item.station_name ||
+        item.bus_stop_name ||
+        item.name ||
+        "",
+      address: item.address || item.location || "",
+      stop_order:
+        item.stop_order ||
+        item.sort_order ||
+        item.order_number ||
+        "",
       note: item.note || "",
     });
-  };
+  }
 
-  const deleteStop = async (id) => {
+  async function deleteStop(id) {
     if (!confirm("Xóa điểm dừng này?")) return;
 
     try {
       await apiDelete("routeStops", id);
-      loadStops();
+      await loadStops();
     } catch (error) {
+      console.log("Lỗi xóa điểm dừng:", error);
       alert(error.message || "Lỗi xóa điểm dừng");
     }
-  };
+  }
 
   const filtered = stops.filter((item) => {
     const text = [
+      item.route_name,
+      getRouteName(item.route_id),
       item.stop_name,
+      item.station_name,
+      item.bus_stop_name,
       item.name,
       item.address,
-      getRouteName(item.route_id),
+      item.location,
       item.note,
     ]
       .join(" ")
@@ -132,7 +196,9 @@ export default function RouteStops() {
           <p style={desc}>Quản lý các điểm đón/trả khách theo từng tuyến.</p>
         </div>
 
-        <button onClick={loadStops} style={btnLight}>⟳ Tải lại</button>
+        <button onClick={loadStops} style={btnLight}>
+          ⟳ Tải lại
+        </button>
       </div>
 
       <div style={formBox}>
@@ -142,9 +208,10 @@ export default function RouteStops() {
           style={input}
         >
           <option value="">-- Chọn tuyến --</option>
+
           {routes.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.name || r.route_name}
+              {r.name || r.route_name || r.route_code || r.code}
             </option>
           ))}
         </select>
@@ -215,20 +282,42 @@ export default function RouteStops() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan="7" style={empty}>Chưa có điểm dừng tuyến</td>
+                <td colSpan="7" style={empty}>
+                  Chưa có điểm dừng tuyến
+                </td>
               </tr>
             ) : (
               filtered.map((item, index) => (
                 <tr key={item.id}>
                   <td style={td}>{index + 1}</td>
-                  <td style={td}>{item.route_name || getRouteName(item.route_id)}</td>
-                  <td style={td}>{item.stop_name || item.name}</td>
-                  <td style={td}>{item.address || "—"}</td>
-                  <td style={td}>{item.stop_order || 0}</td>
+                  <td style={td}>
+                    {item.route_name || getRouteName(item.route_id)}
+                  </td>
+                  <td style={td}>
+                    {item.stop_name ||
+                      item.station_name ||
+                      item.bus_stop_name ||
+                      item.name ||
+                      "—"}
+                  </td>
+                  <td style={td}>{item.address || item.location || "—"}</td>
+                  <td style={td}>
+                    {item.stop_order ||
+                      item.sort_order ||
+                      item.order_number ||
+                      0}
+                  </td>
                   <td style={td}>{item.note || "—"}</td>
                   <td style={td}>
-                    <button onClick={() => editStop(item)} style={btnSmall}>Sửa</button>
-                    <button onClick={() => deleteStop(item.id)} style={btnDanger}>Xóa</button>
+                    <button onClick={() => editStop(item)} style={btnSmall}>
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => deleteStop(item.id)}
+                      style={btnDanger}
+                    >
+                      Xóa
+                    </button>
                   </td>
                 </tr>
               ))
@@ -240,19 +329,115 @@ export default function RouteStops() {
   );
 }
 
-const page = { padding: 24, background: "#f5f7fb", minHeight: "100vh" };
-const header = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 };
-const desc = { color: "#6b7280", marginTop: 4 };
-const formBox = { display: "flex", flexWrap: "wrap", gap: 10, background: "#fff", padding: 14, borderRadius: 12, marginBottom: 14 };
-const toolbar = { background: "#fff", padding: 14, borderRadius: 12, marginBottom: 14 };
-const input = { padding: 10, border: "1px solid #d1d5db", borderRadius: 8, minWidth: 180 };
-const searchInput = { padding: 10, border: "1px solid #d1d5db", borderRadius: 8, width: 320 };
-const btnPrimary = { padding: "10px 14px", background: "#3045a5", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" };
-const btnLight = { padding: "10px 14px", background: "#fff", color: "#3045a5", border: "1px solid #c7d2fe", borderRadius: 8, cursor: "pointer" };
-const tableBox = { background: "#fff", borderRadius: 12, overflow: "hidden" };
-const table = { width: "100%", borderCollapse: "collapse" };
-const th = { background: "#3045a5", color: "#fff", textAlign: "left", padding: 10 };
-const td = { padding: 10, borderBottom: "1px solid #e5e7eb" };
-const empty = { textAlign: "center", padding: 24, color: "#6b7280" };
-const btnSmall = { marginRight: 6, padding: "5px 9px", borderRadius: 6, border: "1px solid #ccc", cursor: "pointer" };
-const btnDanger = { padding: "5px 9px", borderRadius: 6, border: "none", background: "#dc2626", color: "#fff", cursor: "pointer" };
+const page = {
+  padding: 24,
+  background: "#f5f7fb",
+  minHeight: "100vh",
+};
+
+const header = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 16,
+};
+
+const desc = {
+  color: "#6b7280",
+  marginTop: 4,
+};
+
+const formBox = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  background: "#fff",
+  padding: 14,
+  borderRadius: 12,
+  marginBottom: 14,
+};
+
+const toolbar = {
+  background: "#fff",
+  padding: 14,
+  borderRadius: 12,
+  marginBottom: 14,
+};
+
+const input = {
+  padding: 10,
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  minWidth: 180,
+};
+
+const searchInput = {
+  padding: 10,
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  width: 320,
+};
+
+const btnPrimary = {
+  padding: "10px 14px",
+  background: "#3045a5",
+  color: "#fff",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
+};
+
+const btnLight = {
+  padding: "10px 14px",
+  background: "#fff",
+  color: "#3045a5",
+  border: "1px solid #c7d2fe",
+  borderRadius: 8,
+  cursor: "pointer",
+};
+
+const tableBox = {
+  background: "#fff",
+  borderRadius: 12,
+  overflow: "hidden",
+};
+
+const table = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const th = {
+  background: "#3045a5",
+  color: "#fff",
+  textAlign: "left",
+  padding: 10,
+};
+
+const td = {
+  padding: 10,
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const empty = {
+  textAlign: "center",
+  padding: 24,
+  color: "#6b7280",
+};
+
+const btnSmall = {
+  marginRight: 6,
+  padding: "5px 9px",
+  borderRadius: 6,
+  border: "1px solid #ccc",
+  cursor: "pointer",
+};
+
+const btnDanger = {
+  padding: "5px 9px",
+  borderRadius: 6,
+  border: "none",
+  background: "#dc2626",
+  color: "#fff",
+  cursor: "pointer",
+};
