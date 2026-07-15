@@ -59,6 +59,11 @@ const tableMap = {
   maintenance: "bus_maintenance",
   tripLocations: "trip_locations",
   settings: "system_settings",
+
+   // ĐẶT VÉ
+  bookings: "bookings",
+  tickets: "tickets",
+  payments: "payments",
 };
 
 function getTable(module) {

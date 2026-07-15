@@ -362,6 +362,57 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ================= BOOKINGS / ĐẶT VÉ =================
+CREATE TABLE IF NOT EXISTS bookings (
+  id SERIAL PRIMARY KEY,
+  booking_code VARCHAR(100),
+  passenger_name VARCHAR(255),
+  passenger_phone VARCHAR(50),
+  passenger_email VARCHAR(255),
+  trip_id INTEGER,
+  trip_code VARCHAR(100),
+  route_name VARCHAR(255),
+  total_amount NUMERIC DEFAULT 0,
+  paid_amount NUMERIC DEFAULT 0,
+  debt_amount NUMERIC DEFAULT 0,
+  status VARCHAR(50) DEFAULT 'pending',
+  note TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================= TICKETS / VÉ XE =================
+CREATE TABLE IF NOT EXISTS tickets (
+  id SERIAL PRIMARY KEY,
+  ticket_code VARCHAR(100),
+  booking_id INTEGER REFERENCES bookings(id) ON DELETE CASCADE,
+  passenger_name VARCHAR(255),
+  passenger_phone VARCHAR(50),
+  trip_id INTEGER,
+  trip_code VARCHAR(100),
+  seat_number VARCHAR(50),
+  price NUMERIC DEFAULT 0,
+  status VARCHAR(50) DEFAULT 'active',
+  checked_in BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================= PAYMENTS / THANH TOÁN =================
+CREATE TABLE IF NOT EXISTS payments (
+  id SERIAL PRIMARY KEY,
+  payment_code VARCHAR(100),
+  booking_id INTEGER REFERENCES bookings(id) ON DELETE SET NULL,
+  booking_code VARCHAR(100),
+  passenger_name VARCHAR(255),
+  amount NUMERIC DEFAULT 0,
+  payment_method VARCHAR(50) DEFAULT 'cash',
+  status VARCHAR(50) DEFAULT 'paid',
+  note TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- =====================================================
 -- INDEXES

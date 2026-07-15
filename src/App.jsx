@@ -13,10 +13,36 @@ import Header from "./components/Header";
 // CORE
 import Dashboard from "./pages/Dashboard";
 
-// SALES
+// ĐẶT VÉ
+import BookingList from "./pages/BookingList";
+import Tickets from "./pages/Tickets";
+import Payments from "./pages/Payments";
+
+// CHUYẾN XE
+import Trips from "./pages/Trips";
+import RoutesPage from "./pages/RoutesPage";
+import RouteStops from "./pages/RouteStops";
+
+// BẾN VÀ TRẠM
+import Stations from "./pages/Stations";
+import BusStops from "./pages/BusStops";
+
+// PHƯƠNG TIỆN
+import Buses from "./pages/Buses";
+import BusTypes from "./pages/BusTypes";
+import BusSeats from "./pages/BusSeats";
+import Maintenance from "./pages/Maintenance";
+
+// SALES / BÁO CÁO
 import Sales from "./pages/Sales";
 import SalesMulti from "./pages/SalesMulti";
 import Orders from "./pages/Orders";
+
+import Drivers from "./pages/Drivers";
+import Reviews from "./pages/Reviews";
+import Notifications from "./pages/Notifications";
+import Users from "./pages/Users";
+import Settings from "./pages/Settings";
 
 // PURCHASE
 import Purchases from "./pages/Purchases";
@@ -77,8 +103,7 @@ export default function App() {
 }
 
 function AppRoutes() {
-  // Khi navigate sang trang khác, useLocation làm component render lại
-  // và đọc lại user mới từ localStorage.
+  // Giúp App render lại khi chuyển trang
   useLocation();
 
   const user = getUserFromLocalStorage();
@@ -88,21 +113,13 @@ function AppRoutes() {
       {/* LOGIN */}
       <Route
         path="/login"
-        element={
-          user ? <Navigate to="/dashboard" replace /> : <Login />
-        }
+        element={user ? <Navigate to="/dashboard" replace /> : <Login />}
       />
 
       {/* PRIVATE AREA */}
       <Route
         path="/*"
-        element={
-          user ? (
-            <Layout user={user} />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
+        element={user ? <Layout user={user} /> : <Navigate to="/login" replace />}
       />
     </Routes>
   );
@@ -141,7 +158,27 @@ function Layout({ user }) {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* SALES */}
+            {/* ĐẶT VÉ */}
+            <Route path="/bookings" element={<BookingList />} />
+            <Route path="/tickets" element={<Tickets />} />
+            <Route path="/payments" element={<Payments />} />
+
+            {/* CHUYẾN XE */}
+            <Route path="/trips" element={<Trips />} />
+            <Route path="/routes" element={<RoutesPage />} />
+            <Route path="/route-stops" element={<RouteStops />} />
+
+            {/* BẾN VÀ TRẠM */}
+            <Route path="/stations" element={<Stations />} />
+            <Route path="/bus-stops" element={<BusStops />} />
+
+            {/* PHƯƠNG TIỆN */}
+            <Route path="/buses" element={<Buses />} />
+            <Route path="/bus-types" element={<BusTypes />} />
+            <Route path="/bus-seats" element={<BusSeats />} />
+            <Route path="/maintenance" element={<Maintenance />} />
+
+            {/* SALES / BÁO CÁO */}
             <Route path="/sales" element={<Sales />} />
             <Route path="/multi-sales" element={<SalesMulti />} />
             <Route path="/orders" element={<Orders />} />
@@ -153,6 +190,19 @@ function Layout({ user }) {
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/products" element={<Products />} />
 
+            {/* TÀI XẾ */}
+            <Route path="/drivers" element={<Drivers />} />
+
+            {/* ĐÁNH GIÁ */}
+            <Route path="/reviews" element={<Reviews />} />
+
+            {/* THÔNG BÁO */}
+            <Route path="/notifications" element={<Notifications />} />
+
+            {/* HỆ THỐNG */}
+            <Route path="/users" element={<Users />} />
+            <Route path="/settings" element={<Settings />} />
+
             {/* FINANCE */}
             <Route path="/cash" element={<Cashbook />} />
             <Route path="/expenses" element={<Expenses />} />
@@ -160,19 +210,13 @@ function Layout({ user }) {
             <Route path="/debts" element={<Debts />} />
 
             {/* CATEGORY */}
-            <Route
-              path="/product-groups"
-              element={<ProductGroups />}
-            />
+            <Route path="/product-groups" element={<ProductGroups />} />
             <Route path="/units" element={<Units />} />
             <Route path="/price-list" element={<PriceList />} />
 
             {/* CUSTOMER */}
             <Route path="/customers" element={<Customers />} />
-            <Route
-              path="/customer-groups"
-              element={<CustomerGroups />}
-            />
+            <Route path="/customer-groups" element={<CustomerGroups />} />
             <Route path="/membership" element={<Membership />} />
 
             {/* STAFF */}

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   apiGet,
   apiGetAvailableSeats,
-  apiCreateFullBooking,
 } from "../services/api";
 
 export default function SalesMulti() {
