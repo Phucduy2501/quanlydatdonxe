@@ -1,259 +1,282 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import NotificationBell from "../components/NotificationBell";
+import { apiGet } from "../services/api";
 import "./dashboard.css";
 
-const demoOrders = [
+const demoBookings = [
   {
     id: 1,
-    code: "DH001",
+    booking_code: "BK001",
     customer_name: "Nguyễn Văn An",
-    total: 1250000,
-    status: "completed",
+    total: 450000,
+    status: "confirmed",
   },
   {
     id: 2,
-    code: "DH002",
+    booking_code: "BK002",
     customer_name: "Trần Thị Bình",
-    total: 860000,
+    total: 320000,
     status: "pending",
   },
   {
     id: 3,
-    code: "DH003",
+    booking_code: "BK003",
     customer_name: "Lê Hoàng Nam",
-    total: 450000,
-    status: "processing",
-  },
-  {
-    id: 4,
-    code: "DH004",
-    customer_name: "Phạm Thu Hà",
-    total: 920000,
-    status: "completed",
+    total: 520000,
+    status: "paid",
   },
 ];
 
-const demoProducts = [
+const demoTrips = [
   {
     id: 1,
-    name: "Dép EVA màu đen",
-    stock: 8,
-    min_stock: 10,
-    max_stock: 100,
-    expiry_date: null,
+    trip_code: "CX001",
+    route_name: "Đà Nẵng - Huế",
+    departure_time: "2026-07-15T08:00:00",
+    total_seats: 40,
+    booked_seats: 28,
+    status: "active",
   },
   {
     id: 2,
-    name: "Dép EVA màu trắng",
-    stock: 120,
-    min_stock: 10,
-    max_stock: 100,
-    expiry_date: null,
+    trip_code: "CX002",
+    route_name: "Đà Nẵng - Hội An",
+    departure_time: "2026-07-15T13:30:00",
+    total_seats: 30,
+    booked_seats: 12,
+    status: "active",
   },
   {
     id: 3,
-    name: "Dép EVA màu hồng",
-    stock: 25,
-    min_stock: 10,
-    max_stock: 100,
-    expiry_date: null,
-  },
-  {
-    id: 4,
-    name: "Dép EVA phối xanh",
-    stock: 5,
-    min_stock: 10,
-    max_stock: 80,
-    expiry_date: null,
-  },
-  {
-    id: 5,
-    name: "Nước giặt hương hoa",
-    stock: 14,
-    min_stock: 8,
-    max_stock: 60,
-    expiry_date: "2026-08-05",
-  },
-  {
-    id: 6,
-    name: "Sữa tắm dưỡng ẩm",
-    stock: 7,
-    min_stock: 5,
-    max_stock: 40,
-    expiry_date: "2026-07-10",
+    trip_code: "CX003",
+    route_name: "Huế - Quảng Bình",
+    departure_time: "2026-07-16T07:00:00",
+    total_seats: 40,
+    booked_seats: 35,
+    status: "active",
   },
 ];
 
-const demoExpenses = [
+const demoBuses = [
   {
     id: 1,
-    name: "Chi phí quảng cáo",
-    amount: 350000,
+    plate_number: "43A-12345",
+    seat_count: 40,
+    status: "active",
   },
   {
     id: 2,
-    name: "Chi phí vận chuyển",
-    amount: 180000,
-  },
-  {
-    id: 3,
-    name: "Chi phí đóng gói",
-    amount: 120000,
+    plate_number: "43B-67890",
+    seat_count: 34,
+    status: "maintenance",
   },
 ];
 
-const demoCashbook = [
+const demoPayments = [
   {
     id: 1,
-    type: "thu",
-    amount: 3480000,
+    amount: 450000,
+    status: "paid",
   },
   {
     id: 2,
-    type: "thu",
-    amount: 1250000,
+    amount: 320000,
+    status: "pending",
   },
   {
     id: 3,
-    type: "chi",
-    amount: 530000,
-  },
-  {
-    id: 4,
-    type: "chi",
-    amount: 210000,
+    amount: 520000,
+    status: "paid",
   },
 ];
 
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState(demoOrders);
-  const [products, setProducts] = useState(demoProducts);
-  const [expenses, setExpenses] = useState(demoExpenses);
-  const [cashbook, setCashbook] = useState(demoCashbook);
+  const [bookings, setBookings] = useState(demoBookings);
+  const [trips, setTrips] = useState(demoTrips);
+  const [buses, setBuses] = useState(demoBuses);
+  const [payments, setPayments] = useState(demoPayments);
+
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  const fetchData = () => {
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const toArray = (res) => {
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.data)) return res.data;
+    return [];
+  };
+
+  const fetchData = async () => {
     if (loading) return;
 
     setLoading(true);
 
-    setTimeout(() => {
-      setOrders([...demoOrders]);
-      setProducts([...demoProducts]);
-      setExpenses([...demoExpenses]);
-      setCashbook([...demoCashbook]);
+    try {
+      const [bookingRes, tripRes, busRes, paymentRes] = await Promise.allSettled([
+        apiGet("bookings"),
+        apiGet("trips"),
+        apiGet("buses"),
+        apiGet("payments"),
+      ]);
+
+      if (bookingRes.status === "fulfilled") {
+        setBookings(toArray(bookingRes.value));
+      }
+
+      if (tripRes.status === "fulfilled") {
+        setTrips(toArray(tripRes.value));
+      }
+
+      if (busRes.status === "fulfilled") {
+        setBuses(toArray(busRes.value));
+      }
+
+      if (paymentRes.status === "fulfilled") {
+        setPayments(toArray(paymentRes.value));
+      }
+
       setLastUpdated(new Date());
+    } catch (error) {
+      console.log("Lỗi tải dashboard:", error);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   const formatMoney = (number) => {
     return new Intl.NumberFormat("vi-VN").format(Number(number || 0));
   };
 
-  const formatDate = (dateValue) => {
-    if (!dateValue) return "Không có";
+  const formatDateTime = (value) => {
+    if (!value) return "Chưa có";
 
-    const date = new Date(dateValue);
+    const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-      return "Không hợp lệ";
-    }
+    if (Number.isNaN(date.getTime())) return "Không hợp lệ";
 
-    return date.toLocaleDateString("vi-VN");
+    return date.toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   };
 
-  const getMinStock = (product) => {
-    return Number(product.min_stock ?? product.minStock ?? 10);
-  };
-
-  const getMaxStock = (product) => {
-    return Number(product.max_stock ?? product.maxStock ?? 500);
-  };
-
-  const getExpiryDate = (product) => {
-    return product.expiry_date || product.expiryDate || null;
-  };
-
-  const revenue = orders.reduce((sum, order) => {
-    return sum + Number(order.total || 0);
-  }, 0);
-
-  const cost = expenses.reduce((sum, expense) => {
-    return sum + Number(expense.amount || 0);
-  }, 0);
-
-  const profit = revenue - cost;
-
-  const stock = products.reduce((sum, product) => {
-    return sum + Number(product.stock || 0);
-  }, 0);
-
-  const lowStockProducts = products.filter((product) => {
-    return Number(product.stock || 0) <= getMinStock(product);
-  });
-
-  const overStockProducts = products.filter((product) => {
-    return Number(product.stock || 0) >= getMaxStock(product);
-  });
-
-  const almostExpiredProducts = products.filter((product) => {
-    const expiryValue = getExpiryDate(product);
-
-    if (!expiryValue) return false;
-
-    const now = new Date();
-    const expiry = new Date(expiryValue);
-
-    if (Number.isNaN(expiry.getTime())) return false;
-
-    const difference = expiry.getTime() - now.getTime();
-    const differenceDays = Math.ceil(
-      difference / (1000 * 60 * 60 * 24)
+  const getBookingTotal = (booking) => {
+    return Number(
+      booking.total ||
+        booking.total_amount ||
+        booking.amount ||
+        booking.price ||
+        0
     );
+  };
 
-    return differenceDays > 0 && differenceDays <= 30;
-  });
-
-  const expiredProducts = products.filter((product) => {
-    const expiryValue = getExpiryDate(product);
-
-    if (!expiryValue) return false;
-
-    const expiry = new Date(expiryValue);
-
-    if (Number.isNaN(expiry.getTime())) return false;
-
-    return expiry.getTime() < new Date().getTime();
-  });
-
-  const totalThu = cashbook
-    .filter((item) => item.type === "thu")
-    .reduce((sum, item) => {
-      return sum + Number(item.amount || 0);
+  const revenue = payments
+    .filter((payment) => {
+      return (
+        payment.status === "paid" ||
+        payment.status === "completed" ||
+        payment.payment_status === "paid"
+      );
+    })
+    .reduce((sum, payment) => {
+      return sum + Number(payment.amount || payment.total || 0);
     }, 0);
 
-  const totalChi = cashbook
-    .filter((item) => item.type === "chi")
-    .reduce((sum, item) => {
-      return sum + Number(item.amount || 0);
-    }, 0);
+  const bookingRevenue = bookings.reduce((sum, booking) => {
+    return sum + getBookingTotal(booking);
+  }, 0);
 
-  const pendingOrders = orders.filter(
-    (order) => order.status === "pending"
+  const totalRevenue = revenue || bookingRevenue;
+
+  const totalBookings = bookings.length;
+  const totalTrips = trips.length;
+  const totalBuses = buses.length;
+
+  const pendingBookings = bookings.filter((booking) => {
+    return booking.status === "pending" || booking.payment_status === "unpaid";
+  }).length;
+
+  const confirmedBookings = bookings.filter((booking) => {
+    return booking.status === "confirmed" || booking.status === "paid";
+  }).length;
+
+  const cancelledBookings = bookings.filter((booking) => {
+    return booking.status === "cancelled";
+  }).length;
+
+  const paidPayments = payments.filter((payment) => {
+    return payment.status === "paid" || payment.status === "completed";
+  }).length;
+
+  const pendingPayments = payments.filter((payment) => {
+    return payment.status === "pending" || payment.status === "unpaid";
+  }).length;
+
+  const activeBuses = buses.filter((bus) => bus.status === "active").length;
+  const maintenanceBuses = buses.filter(
+    (bus) => bus.status === "maintenance"
   ).length;
 
-  const processingOrders = orders.filter(
-    (order) => order.status === "processing"
-  ).length;
+  const todayTrips = trips.filter((trip) => {
+    const value = trip.departure_time || trip.start_time || trip.date;
 
-  const completedOrders = orders.filter(
-    (order) => order.status === "completed"
-  ).length;
+    if (!value) return false;
+
+    const tripDate = new Date(value);
+    const today = new Date();
+
+    return (
+      tripDate.getDate() === today.getDate() &&
+      tripDate.getMonth() === today.getMonth() &&
+      tripDate.getFullYear() === today.getFullYear()
+    );
+  });
+
+  const upcomingTrips = trips
+    .filter((trip) => {
+      const value = trip.departure_time || trip.start_time;
+
+      if (!value) return false;
+
+      const tripDate = new Date(value);
+
+      return tripDate.getTime() >= new Date().getTime();
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.departure_time || a.start_time || 0);
+      const dateB = new Date(b.departure_time || b.start_time || 0);
+
+      return dateA - dateB;
+    });
+
+  const fullTrips = trips.filter((trip) => {
+    const totalSeats = Number(trip.total_seats || trip.seat_count || 0);
+    const bookedSeats = Number(trip.booked_seats || trip.booked_count || 0);
+
+    if (!totalSeats) return false;
+
+    return bookedSeats >= totalSeats;
+  });
+
+  const nearlyFullTrips = trips.filter((trip) => {
+    const totalSeats = Number(trip.total_seats || trip.seat_count || 0);
+    const bookedSeats = Number(trip.booked_seats || trip.booked_count || 0);
+
+    if (!totalSeats) return false;
+
+    const percent = (bookedSeats / totalSeats) * 100;
+
+    return percent >= 80 && bookedSeats < totalSeats;
+  });
 
   return (
     <div className="dashboard-page">
@@ -261,9 +284,7 @@ export default function Dashboard() {
         <div>
           <h2>Tổng quan</h2>
 
-          <p>
-            Xin chào, đây là bảng tổng hợp tình hình kho hàng và bán hàng.
-          </p>
+          <p>Xin chào, đây là bảng tổng hợp tình hình đặt vé và vận hành xe.</p>
         </div>
 
         <div
@@ -293,21 +314,16 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <h3>
-              Chào bạn, hãy bắt đầu quản lý cửa hàng hiệu quả hơn
-            </h3>
+            <h3>Chào bạn, hãy bắt đầu quản lý nhà xe hiệu quả hơn</h3>
 
             <p>
-              Theo dõi tồn kho, doanh thu, chi phí, đơn hàng và cảnh báo
-              hàng hóa ngay trên một màn hình.
+              Theo dõi đặt vé, chuyến xe, thanh toán, phương tiện và cảnh báo
+              vận hành ngay trên một màn hình.
             </p>
 
             <div className="welcome-actions">
-              <button
-                type="button"
-                onClick={() => navigate("/products")}
-              >
-                Bắt đầu sử dụng
+              <button type="button" onClick={() => navigate("/bookings")}>
+                Quản lý đặt vé
               </button>
 
               <button
@@ -334,195 +350,190 @@ export default function Dashboard() {
           className="summary-card blue"
           role="button"
           tabIndex={0}
-          onClick={() => navigate("/orders")}
+          onClick={() => navigate("/bookings")}
           onKeyDown={(event) => {
-            if (event.key === "Enter") navigate("/orders");
+            if (event.key === "Enter") navigate("/bookings");
           }}
         >
-          <p>Doanh thu</p>
-          <h3>{formatMoney(revenue)} đ</h3>
-          <span>Tổng doanh thu đơn hàng</span>
+          <p>Doanh thu vé</p>
+          <h3>{formatMoney(totalRevenue)} đ</h3>
+          <span>Tổng tiền từ đặt vé / thanh toán</span>
         </div>
 
         <div
           className="summary-card red"
           role="button"
           tabIndex={0}
-          onClick={() => navigate("/expenses")}
+          onClick={() => navigate("/bookings")}
           onKeyDown={(event) => {
-            if (event.key === "Enter") navigate("/expenses");
+            if (event.key === "Enter") navigate("/bookings");
           }}
         >
-          <p>Chi phí</p>
-          <h3>{formatMoney(cost)} đ</h3>
-          <span>Tổng chi phí phát sinh</span>
+          <p>Đặt vé chờ xử lý</p>
+          <h3>{pendingBookings}</h3>
+          <span>Số đơn đặt vé chưa xác nhận</span>
         </div>
 
         <div
           className="summary-card green"
           role="button"
           tabIndex={0}
-          onClick={() => navigate("/profit")}
+          onClick={() => navigate("/trips")}
           onKeyDown={(event) => {
-            if (event.key === "Enter") navigate("/profit");
+            if (event.key === "Enter") navigate("/trips");
           }}
         >
-          <p>Lợi nhuận</p>
-          <h3>{formatMoney(profit)} đ</h3>
-          <span>Doanh thu trừ chi phí</span>
+          <p>Chuyến xe</p>
+          <h3>{totalTrips}</h3>
+          <span>Tổng số chuyến đang quản lý</span>
         </div>
 
         <div
           className="summary-card purple"
           role="button"
           tabIndex={0}
-          onClick={() => navigate("/inventory")}
+          onClick={() => navigate("/buses")}
           onKeyDown={(event) => {
-            if (event.key === "Enter") navigate("/inventory");
+            if (event.key === "Enter") navigate("/buses");
           }}
         >
-          <p>Tồn kho</p>
-          <h3>{stock}</h3>
-          <span>Tổng số lượng hàng tồn</span>
+          <p>Phương tiện</p>
+          <h3>{totalBuses}</h3>
+          <span>Tổng số xe trong hệ thống</span>
         </div>
       </div>
 
       <div className="dashboard-grid">
         <Panel
-          title="Tồn kho dưới mức tối thiểu"
+          title="Chuyến xe hôm nay"
           onReload={fetchData}
-          onView={() => navigate("/inventory")}
+          onView={() => navigate("/trips")}
           lastUpdated={lastUpdated}
           loading={loading}
         >
           <table>
             <thead>
               <tr>
-                <th>Tên hàng hóa</th>
-                <th>SL tồn</th>
-                <th>SL tối thiểu</th>
+                <th>Mã chuyến</th>
+                <th>Tuyến đường</th>
+                <th>Khởi hành</th>
               </tr>
             </thead>
 
             <tbody>
-              {lowStockProducts.length > 0 ? (
-                lowStockProducts.slice(0, 5).map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
-                    <td>{product.stock || 0}</td>
-                    <td>{getMinStock(product)}</td>
+              {todayTrips.length > 0 ? (
+                todayTrips.slice(0, 5).map((trip) => (
+                  <tr key={trip.id}>
+                    <td>{trip.trip_code || trip.code || `CX${trip.id}`}</td>
+                    <td>{trip.route_name || trip.route || "Chưa có tuyến"}</td>
+                    <td>
+                      {formatDateTime(trip.departure_time || trip.start_time)}
+                    </td>
                   </tr>
                 ))
               ) : (
-                <EmptyRow
-                  colSpan={3}
-                  text="Không có hàng dưới mức tối thiểu"
-                />
+                <EmptyRow colSpan={3} text="Không có chuyến xe hôm nay" />
               )}
             </tbody>
           </table>
         </Panel>
 
         <Panel
-          title="Tồn kho vượt mức tối đa"
+          title="Chuyến xe sắp khởi hành"
           onReload={fetchData}
-          onView={() => navigate("/inventory")}
+          onView={() => navigate("/trips")}
           lastUpdated={lastUpdated}
           loading={loading}
         >
           <table>
             <thead>
               <tr>
-                <th>Tên hàng hóa</th>
-                <th>SL tồn</th>
-                <th>SL tối đa</th>
+                <th>Mã chuyến</th>
+                <th>Tuyến đường</th>
+                <th>Thời gian</th>
               </tr>
             </thead>
 
             <tbody>
-              {overStockProducts.length > 0 ? (
-                overStockProducts.slice(0, 5).map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
-                    <td>{product.stock || 0}</td>
-                    <td>{getMaxStock(product)}</td>
+              {upcomingTrips.length > 0 ? (
+                upcomingTrips.slice(0, 5).map((trip) => (
+                  <tr key={trip.id}>
+                    <td>{trip.trip_code || trip.code || `CX${trip.id}`}</td>
+                    <td>{trip.route_name || trip.route || "Chưa có tuyến"}</td>
+                    <td>
+                      {formatDateTime(trip.departure_time || trip.start_time)}
+                    </td>
                   </tr>
                 ))
               ) : (
-                <EmptyRow
-                  colSpan={3}
-                  text="Không có hàng vượt mức tối đa"
-                />
+                <EmptyRow colSpan={3} text="Chưa có chuyến sắp khởi hành" />
               )}
             </tbody>
           </table>
         </Panel>
 
         <Panel
-          title="Hàng hóa sắp hết hạn trong 30 ngày"
+          title="Chuyến gần hết ghế"
           onReload={fetchData}
-          onView={() => navigate("/inventory")}
+          onView={() => navigate("/trips")}
           lastUpdated={lastUpdated}
           loading={loading}
         >
           <table>
             <thead>
               <tr>
-                <th>Tên hàng hóa</th>
-                <th>Hạn sử dụng</th>
-                <th>Số lượng</th>
+                <th>Mã chuyến</th>
+                <th>Đã đặt</th>
+                <th>Tổng ghế</th>
               </tr>
             </thead>
 
             <tbody>
-              {almostExpiredProducts.length > 0 ? (
-                almostExpiredProducts.slice(0, 5).map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
-                    <td>{formatDate(getExpiryDate(product))}</td>
-                    <td>{product.stock || 0}</td>
+              {nearlyFullTrips.length > 0 ? (
+                nearlyFullTrips.slice(0, 5).map((trip) => (
+                  <tr key={trip.id}>
+                    <td>{trip.trip_code || trip.code || `CX${trip.id}`}</td>
+                    <td>{trip.booked_seats || trip.booked_count || 0}</td>
+                    <td>{trip.total_seats || trip.seat_count || 0}</td>
                   </tr>
                 ))
               ) : (
-                <EmptyRow
-                  colSpan={3}
-                  text="Không có hàng sắp hết hạn"
-                />
+                <EmptyRow colSpan={3} text="Không có chuyến gần hết ghế" />
               )}
             </tbody>
           </table>
         </Panel>
 
         <Panel
-          title="Hàng hóa quá hạn sử dụng"
+          title="Chuyến đã hết ghế"
           onReload={fetchData}
-          onView={() => navigate("/inventory")}
+          onView={() => navigate("/trips")}
           lastUpdated={lastUpdated}
           loading={loading}
         >
           <table>
             <thead>
               <tr>
-                <th>Tên hàng hóa</th>
-                <th>Hạn sử dụng</th>
-                <th>Số lượng</th>
+                <th>Mã chuyến</th>
+                <th>Tuyến đường</th>
+                <th>Số ghế</th>
               </tr>
             </thead>
 
             <tbody>
-              {expiredProducts.length > 0 ? (
-                expiredProducts.slice(0, 5).map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
-                    <td>{formatDate(getExpiryDate(product))}</td>
-                    <td>{product.stock || 0}</td>
+              {fullTrips.length > 0 ? (
+                fullTrips.slice(0, 5).map((trip) => (
+                  <tr key={trip.id}>
+                    <td>{trip.trip_code || trip.code || `CX${trip.id}`}</td>
+                    <td>{trip.route_name || trip.route || "Chưa có tuyến"}</td>
+                    <td>
+                      {trip.booked_seats || trip.booked_count || 0}/
+                      {trip.total_seats || trip.seat_count || 0}
+                    </td>
                   </tr>
                 ))
               ) : (
-                <EmptyRow
-                  colSpan={3}
-                  text="Không có hàng quá hạn"
-                />
+                <EmptyRow colSpan={3} text="Không có chuyến đã hết ghế" />
               )}
             </tbody>
           </table>
@@ -531,95 +542,86 @@ export default function Dashboard() {
 
       <div className="bottom-grid">
         <StatusBox
-          title="Lệnh xuất kho"
-          onClick={() => navigate("/orders")}
+          title="Tình trạng đặt vé"
+          onClick={() => navigate("/bookings")}
           values={[
             {
-              label: "Quá hạn",
-              value: 0,
+              label: "Chờ xử lý",
+              value: pendingBookings,
               color: "#ff9800",
             },
             {
-              label: "Chưa thực hiện",
-              value: pendingOrders,
+              label: "Đã xác nhận",
+              value: confirmedBookings,
               color: "#52c41a",
             },
             {
-              label: "Đang thực hiện",
-              value: processingOrders,
-              color: "#5b6cff",
+              label: "Đã hủy",
+              value: cancelledBookings,
+              color: "#dc2626",
             },
             {
-              label: "Hoàn thành",
-              value: completedOrders,
+              label: "Tổng đặt vé",
+              value: totalBookings,
               color: "#111827",
             },
           ]}
         />
 
         <StatusBox
-          title="Lệnh nhập kho"
-          onClick={() => navigate("/purchase")}
+          title="Tình trạng phương tiện"
+          onClick={() => navigate("/buses")}
           values={[
             {
-              label: "Quá hạn",
-              value: 0,
-              color: "#ff9800",
-            },
-            {
-              label: "Chờ nhận hàng",
-              value: 2,
+              label: "Đang hoạt động",
+              value: activeBuses,
               color: "#52c41a",
             },
             {
-              label: "Chờ kiểm đếm",
-              value: 1,
-              color: "#5b6cff",
+              label: "Bảo trì",
+              value: maintenanceBuses,
+              color: "#ff9800",
             },
             {
-              label: "Đã hoàn thành",
-              value: 4,
-              color: "#111827",
+              label: "Tổng xe",
+              value: totalBuses,
+              color: "#5b6cff",
             },
           ]}
         />
 
         <div className="money-box">
-          <h3>Quỹ tiền</h3>
+          <h3>Thanh toán</h3>
 
           <div
             className="money-row"
             role="button"
             tabIndex={0}
-            onClick={() => navigate("/cash")}
+            onClick={() => navigate("/payments")}
             onKeyDown={(event) => {
-              if (event.key === "Enter") navigate("/cash");
+              if (event.key === "Enter") navigate("/payments");
             }}
           >
-            <span>Tổng thu</span>
-            <b className="green-text">
-              {formatMoney(totalThu)} đ
-            </b>
+            <span>Đã thanh toán</span>
+            <b className="green-text">{paidPayments}</b>
           </div>
 
           <div
             className="money-row"
             role="button"
             tabIndex={0}
-            onClick={() => navigate("/cash")}
+            onClick={() => navigate("/payments")}
             onKeyDown={(event) => {
-              if (event.key === "Enter") navigate("/cash");
+              if (event.key === "Enter") navigate("/payments");
             }}
           >
-            <span>Tổng chi</span>
-            <b className="red-text">
-              {formatMoney(totalChi)} đ
-            </b>
+            <span>Chờ thanh toán</span>
+            <b className="red-text">{pendingPayments}</b>
           </div>
 
           <div className="money-row total">
-            <span>Còn lại</span>
-            <b>{formatMoney(totalThu - totalChi)} đ</b>
+            <span>Doanh thu vé</span>
+            <b>{formatMoney(totalRevenue)} đ</b>
           </div>
         </div>
       </div>
@@ -688,16 +690,14 @@ function StatusBox({ title, values, onClick }) {
         <h3>{title}</h3>
 
         <button type="button" onClick={onClick}>
-          Cần thực hiện ➜
+          Xem chi tiết ➜
         </button>
       </div>
 
       <div className="status-values">
         {values.map((item) => (
           <div key={`${title}-${item.label}`}>
-            <b style={{ color: item.color }}>
-              {item.value}
-            </b>
+            <b style={{ color: item.color }}>{item.value}</b>
 
             <span>{item.label}</span>
           </div>

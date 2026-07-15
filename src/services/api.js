@@ -2,21 +2,15 @@ const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3000/api"
 ).replace(/\/$/, "");
 
-function getToken() {
-  return localStorage.getItem("token");
-}
+// ================= REQUEST CHUNG =================
 
 async function request(endpoint, options = {}) {
-  const token = getToken();
+  const isFormData = options.body instanceof FormData;
 
   const headers = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers || {}),
   };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
 
   let response;
 
@@ -26,8 +20,11 @@ async function request(endpoint, options = {}) {
       headers,
     });
   } catch (error) {
-    console.error("Lỗi kết nối backend:", error);
-    throw new Error("Không thể kết nối tới backend");
+    console.error("Không kết nối được backend:", error);
+
+    throw new Error(
+      "Không thể kết nối tới backend. Kiểm tra Docker backend có đang chạy không."
+    );
   }
 
   let data = null;
@@ -38,26 +35,16 @@ async function request(endpoint, options = {}) {
     data = null;
   }
 
-  // Không tự văng về login khi API con lỗi 401
-  if (response.status === 401) {
-    console.log("API bị 401:", endpoint, data);
-
-    if (endpoint === "auth/login") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-
-      throw new Error(data?.message || "Email hoặc mật khẩu không chính xác");
-    }
+  if (!response.ok) {
+    console.log("API lỗi:", {
+      endpoint,
+      status: response.status,
+      data,
+    });
 
     throw new Error(
-      data?.message || "Bạn chưa có quyền hoặc API chưa cấu hình đúng"
+      data?.message || data?.error || `Lỗi server ${response.status}`
     );
-  }
-
-  if (!response.ok) {
-    console.log("API lỗi:", endpoint, response.status, data);
-
-    throw new Error(data?.message || `Lỗi server ${response.status}`);
   }
 
   return data;
@@ -81,10 +68,16 @@ export async function apiGetCurrentUser() {
   });
 }
 
+export function apiLogout() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+}
+
 // ================= CRUD CHUNG =================
 
 export async function apiGet(module, params = {}) {
   const queryString = new URLSearchParams(params).toString();
+
   const endpoint = queryString ? `${module}?${queryString}` : module;
 
   return request(endpoint, {
@@ -193,13 +186,13 @@ export async function apiCreatePayment(data) {
 }
 
 export async function apiUpdatePaymentStatus(id, data) {
-  return request(`payments/${id}/status`, {
+  return request(`payments/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
 }
 
-// ================= ORDERS / DỰ PHÒNG FILE CŨ =================
+// ================= FILE CŨ DỰ PHÒNG =================
 
 export async function apiCreateFullOrder(data) {
   return request("orders/create-full", {
