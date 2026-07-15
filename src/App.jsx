@@ -1,4 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 
 import Login from "./pages/Login";
 import Sidebar from "./components/Sidebar";
@@ -44,59 +50,96 @@ import Channels from "./pages/Channels";
 
 function getUserFromLocalStorage() {
   const token = localStorage.getItem("token");
-  const user = localStorage.getItem("user");
+  const storedUser = localStorage.getItem("user");
 
-  if (!token || !user) {
+  if (!token || !storedUser) {
     return null;
   }
 
   try {
-    return JSON.parse(user);
+    return JSON.parse(storedUser);
   } catch (error) {
+    console.error("Dữ liệu user không hợp lệ:", error);
+
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+
     return null;
   }
 }
 
-function App() {
-  const user = getUserFromLocalStorage();
-
+export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* LOGIN */}
-        <Route
-          path="/login"
-          element={!user ? <Login /> : <Navigate to="/" replace />}
-        />
-
-        {/* PRIVATE */}
-        <Route
-          path="/*"
-          element={
-            user ? <Layout user={user} /> : <Navigate to="/login" replace />
-          }
-        />
-      </Routes>
+      <AppRoutes />
     </BrowserRouter>
   );
 }
 
-export default App;
+function AppRoutes() {
+  // Khi navigate sang trang khác, useLocation làm component render lại
+  // và đọc lại user mới từ localStorage.
+  useLocation();
 
-// LAYOUT
+  const user = getUserFromLocalStorage();
+
+  return (
+    <Routes>
+      {/* LOGIN */}
+      <Route
+        path="/login"
+        element={
+          user ? <Navigate to="/dashboard" replace /> : <Login />
+        }
+      />
+
+      {/* PRIVATE AREA */}
+      <Route
+        path="/*"
+        element={
+          user ? (
+            <Layout user={user} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+    </Routes>
+  );
+}
+
 function Layout({ user }) {
   return (
-    <div style={{ display: "flex" }}>
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        background: "#f5f7fb",
+      }}
+    >
       <Sidebar />
 
-      <div style={{ flex: 1 }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <Header user={user} />
 
-        <div style={{ padding: 20 }}>
+        <main
+          style={{
+            flex: 1,
+            padding: "20px",
+            overflowX: "auto",
+          }}
+        >
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            {/* DASHBOARD */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
 
             {/* SALES */}
             <Route path="/sales" element={<Sales />} />
@@ -117,13 +160,19 @@ function Layout({ user }) {
             <Route path="/debts" element={<Debts />} />
 
             {/* CATEGORY */}
-            <Route path="/product-groups" element={<ProductGroups />} />
+            <Route
+              path="/product-groups"
+              element={<ProductGroups />}
+            />
             <Route path="/units" element={<Units />} />
             <Route path="/price-list" element={<PriceList />} />
 
             {/* CUSTOMER */}
             <Route path="/customers" element={<Customers />} />
-            <Route path="/customer-groups" element={<CustomerGroups />} />
+            <Route
+              path="/customer-groups"
+              element={<CustomerGroups />}
+            />
             <Route path="/membership" element={<Membership />} />
 
             {/* STAFF */}
@@ -134,9 +183,24 @@ function Layout({ user }) {
             <Route path="/channels" element={<Channels />} />
 
             {/* 404 */}
-            <Route path="*" element={<div>❌ Không tìm thấy</div>} />
+            <Route
+              path="*"
+              element={
+                <div
+                  style={{
+                    padding: "40px",
+                    textAlign: "center",
+                    background: "#ffffff",
+                    borderRadius: "12px",
+                  }}
+                >
+                  <h2>404</h2>
+                  <p>Không tìm thấy trang bạn yêu cầu.</p>
+                </div>
+              }
+            />
           </Routes>
-        </div>
+        </main>
       </div>
     </div>
   );

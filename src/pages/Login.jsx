@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiLogin } from "../services/api";
 import "./Login.css";
 
 export default function Login() {
@@ -8,50 +7,58 @@ export default function Login() {
   const [password, setPassword] = useState("123456");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
+    setError("");
 
-    if (!email.trim() || !password.trim()) {
-      alert("Vui lòng nhập đầy đủ email và mật khẩu!");
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      setError("Vui lòng nhập đầy đủ email và mật khẩu.");
+      return;
+    }
+
+    if (
+      cleanEmail !== "admin@transitgo.com" ||
+      cleanPassword !== "123456"
+    ) {
+      setError("Email hoặc mật khẩu không đúng.");
       return;
     }
 
     setLoading(true);
 
-    try {
-      const data = await apiLogin(email.trim().toLowerCase(), password);
+    const user = {
+      id: 1,
+      name: "TransitGo Administrator",
+      email: cleanEmail,
+      role: "admin",
+    };
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("token", "transitgo-demo-token");
+    localStorage.setItem("user", JSON.stringify(user));
 
-      navigate("/dashboard", {
-        replace: true,
-      });
-    } catch (error) {
-      console.error("Lỗi đăng nhập:", error);
-
-      alert(
-        error.message ||
-          "Không thể đăng nhập. Vui lòng kiểm tra lại tài khoản!"
-      );
-    } finally {
-      setLoading(false);
-    }
+    setTimeout(() => {
+      navigate("/dashboard", { replace: true });
+    }, 300);
   };
 
   return (
     <main className="login-page">
-      <div className="login-background-circle circle-one" />
-      <div className="login-background-circle circle-two" />
+      <div className="background-grid" />
+      <div className="background-circle circle-one" />
+      <div className="background-circle circle-two" />
 
       <section className="login-container">
         <div className="login-brand">
           <div className="brand-icon">🚌</div>
 
-          <div>
+          <div className="brand-content">
             <h1>TransitGo</h1>
             <p>Di chuyển thông minh, hành trình thuận tiện</p>
           </div>
@@ -76,20 +83,17 @@ export default function Login() {
                 <input
                   id="email"
                   type="email"
-                  placeholder="admin@transitgo.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
+                  placeholder="admin@transitgo.com"
+                  autoComplete="off"
                   disabled={loading}
-                  required
                 />
               </div>
             </div>
 
             <div className="form-group">
-              <div className="password-label">
-                <label htmlFor="password">Mật khẩu</label>
-              </div>
+              <label htmlFor="password">Mật khẩu</label>
 
               <div className="input-wrapper">
                 <span className="input-icon">🔒</span>
@@ -97,44 +101,32 @@ export default function Login() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Nhập mật khẩu"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  placeholder="Nhập mật khẩu"
+                  autoComplete="new-password"
                   disabled={loading}
-                  required
                 />
 
                 <button
                   type="button"
                   className="show-password"
-                  onClick={() => setShowPassword((current) => !current)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                   disabled={loading}
-                  aria-label={
-                    showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
-                  }
                 >
                   {showPassword ? "🙈" : "👁"}
                 </button>
               </div>
             </div>
 
+            {error && <div className="login-error">{error}</div>}
+
             <button
-              className="login-button"
               type="submit"
+              className="login-button"
               disabled={loading}
             >
-              {loading ? (
-                <>
-                  <span className="loading-spinner" />
-                  Đang đăng nhập...
-                </>
-              ) : (
-                <>
-                  Đăng nhập
-                  <span className="button-arrow">→</span>
-                </>
-              )}
+              {loading ? "Đang đăng nhập..." : "Đăng nhập →"}
             </button>
           </form>
 
@@ -143,9 +135,7 @@ export default function Login() {
 
             <div>
               <p>Tài khoản dùng thử</p>
-              <span>
-                <strong>admin@transitgo.com</strong>
-              </span>
+              <strong>admin@transitgo.com</strong>
               <span>Mật khẩu: 123456</span>
             </div>
           </div>
