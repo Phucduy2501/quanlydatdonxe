@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import "../index.css";
 
 export default function Sidebar() {
   const location = useLocation();
+
   const [activeMenu, setActiveMenu] = useState(null);
 
-  const isActive = (path) => location.pathname === path;
+  const closeTimer = useRef(null);
+
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
 
   const isGroupActive = (paths) => {
     return paths.some(
@@ -16,29 +21,52 @@ export default function Sidebar() {
     );
   };
 
+  const openMenu = (menuName) => {
+    clearTimeout(closeTimer.current);
+    setActiveMenu(menuName);
+  };
+
+  const keepMenuOpen = () => {
+    clearTimeout(closeTimer.current);
+  };
+
+  const closeMenuWithDelay = () => {
+    clearTimeout(closeTimer.current);
+
+    closeTimer.current = setTimeout(() => {
+      setActiveMenu(null);
+    }, 250);
+  };
+
   const closeMenu = () => {
+    clearTimeout(closeTimer.current);
     setActiveMenu(null);
   };
 
   const toggleMenu = (menuName) => {
-    setActiveMenu((current) =>
-      current === menuName ? null : menuName
+    clearTimeout(closeTimer.current);
+
+    setActiveMenu((currentMenu) =>
+      currentMenu === menuName ? null : menuName
     );
   };
 
   return (
     <aside className="sidebar">
+      {/* LOGO */}
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon">🚌</div>
 
         <div>
           <h2 className="logo">TransitGo</h2>
+
           <span className="sidebar-brand-subtitle">
             Quản lý đặt vé xe
           </span>
         </div>
       </div>
 
+      {/* MENU */}
       <div className="sidebar-menu">
         {/* TỔNG QUAN */}
         <NavLink
@@ -64,11 +92,11 @@ export default function Sidebar() {
               : ""
           }`}
           onClick={() => toggleMenu("booking")}
-          onMouseEnter={() => setActiveMenu("booking")}
-          onMouseLeave={() => setActiveMenu(null)}
+          onMouseEnter={() => openMenu("booking")}
+          onMouseLeave={closeMenuWithDelay}
         >
           <div className="menu-parent-content">
-            <div>
+            <div className="menu-parent-left">
               <span className="menu-icon">🎫</span>
               <span>Đặt vé</span>
             </div>
@@ -81,6 +109,8 @@ export default function Sidebar() {
           {activeMenu === "booking" && (
             <div
               className="dropdown-menu small"
+              onMouseEnter={keepMenuOpen}
+              onMouseLeave={closeMenuWithDelay}
               onClick={(event) => event.stopPropagation()}
             >
               <NavLink
@@ -90,7 +120,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                📋 Danh sách đặt vé
+                <span>📋</span>
+                <span>Danh sách đặt vé</span>
               </NavLink>
 
               <NavLink
@@ -100,7 +131,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🎟️ Vé xe
+                <span>🎟️</span>
+                <span>Vé xe</span>
               </NavLink>
 
               <NavLink
@@ -110,7 +142,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                💳 Thanh toán
+                <span>💳</span>
+                <span>Thanh toán</span>
               </NavLink>
             </div>
           )}
@@ -119,16 +152,20 @@ export default function Sidebar() {
         {/* CHUYẾN XE */}
         <div
           className={`menu-item menu-parent ${
-            isGroupActive(["/trips", "/routes", "/route-stops"])
+            isGroupActive([
+              "/trips",
+              "/routes",
+              "/route-stops",
+            ])
               ? "active"
               : ""
           }`}
           onClick={() => toggleMenu("trips")}
-          onMouseEnter={() => setActiveMenu("trips")}
-          onMouseLeave={() => setActiveMenu(null)}
+          onMouseEnter={() => openMenu("trips")}
+          onMouseLeave={closeMenuWithDelay}
         >
           <div className="menu-parent-content">
-            <div>
+            <div className="menu-parent-left">
               <span className="menu-icon">🗺️</span>
               <span>Chuyến xe</span>
             </div>
@@ -141,6 +178,8 @@ export default function Sidebar() {
           {activeMenu === "trips" && (
             <div
               className="dropdown-menu small"
+              onMouseEnter={keepMenuOpen}
+              onMouseLeave={closeMenuWithDelay}
               onClick={(event) => event.stopPropagation()}
             >
               <NavLink
@@ -150,7 +189,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🚌 Danh sách chuyến
+                <span>🚌</span>
+                <span>Danh sách chuyến</span>
               </NavLink>
 
               <NavLink
@@ -160,7 +200,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🛣️ Tuyến đường
+                <span>🛣️</span>
+                <span>Tuyến đường</span>
               </NavLink>
 
               <NavLink
@@ -170,7 +211,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                📍 Điểm dừng tuyến
+                <span>📍</span>
+                <span>Điểm dừng tuyến</span>
               </NavLink>
             </div>
           )}
@@ -179,16 +221,19 @@ export default function Sidebar() {
         {/* BẾN VÀ TRẠM */}
         <div
           className={`menu-item menu-parent ${
-            isGroupActive(["/stations", "/bus-stops"])
+            isGroupActive([
+              "/stations",
+              "/bus-stops",
+            ])
               ? "active"
               : ""
           }`}
           onClick={() => toggleMenu("stations")}
-          onMouseEnter={() => setActiveMenu("stations")}
-          onMouseLeave={() => setActiveMenu(null)}
+          onMouseEnter={() => openMenu("stations")}
+          onMouseLeave={closeMenuWithDelay}
         >
           <div className="menu-parent-content">
-            <div>
+            <div className="menu-parent-left">
               <span className="menu-icon">🚏</span>
               <span>Bến và trạm</span>
             </div>
@@ -201,6 +246,8 @@ export default function Sidebar() {
           {activeMenu === "stations" && (
             <div
               className="dropdown-menu small"
+              onMouseEnter={keepMenuOpen}
+              onMouseLeave={closeMenuWithDelay}
               onClick={(event) => event.stopPropagation()}
             >
               <NavLink
@@ -210,7 +257,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🏢 Bến xe
+                <span>🏢</span>
+                <span>Bến xe</span>
               </NavLink>
 
               <NavLink
@@ -220,7 +268,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🚏 Trạm dừng
+                <span>🚏</span>
+                <span>Trạm dừng</span>
               </NavLink>
             </div>
           )}
@@ -239,11 +288,11 @@ export default function Sidebar() {
               : ""
           }`}
           onClick={() => toggleMenu("buses")}
-          onMouseEnter={() => setActiveMenu("buses")}
-          onMouseLeave={() => setActiveMenu(null)}
+          onMouseEnter={() => openMenu("buses")}
+          onMouseLeave={closeMenuWithDelay}
         >
           <div className="menu-parent-content">
-            <div>
+            <div className="menu-parent-left">
               <span className="menu-icon">🚍</span>
               <span>Phương tiện</span>
             </div>
@@ -256,6 +305,8 @@ export default function Sidebar() {
           {activeMenu === "buses" && (
             <div
               className="dropdown-menu small"
+              onMouseEnter={keepMenuOpen}
+              onMouseLeave={closeMenuWithDelay}
               onClick={(event) => event.stopPropagation()}
             >
               <NavLink
@@ -265,7 +316,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🚌 Danh sách xe
+                <span>🚌</span>
+                <span>Danh sách xe</span>
               </NavLink>
 
               <NavLink
@@ -275,7 +327,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🚐 Loại xe
+                <span>🚐</span>
+                <span>Loại xe</span>
               </NavLink>
 
               <NavLink
@@ -285,7 +338,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                💺 Sơ đồ ghế
+                <span>💺</span>
+                <span>Sơ đồ ghế</span>
               </NavLink>
 
               <NavLink
@@ -295,7 +349,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                🔧 Bảo trì xe
+                <span>🔧</span>
+                <span>Bảo trì xe</span>
               </NavLink>
             </div>
           )}
@@ -364,14 +419,19 @@ export default function Sidebar() {
         {/* HỆ THỐNG */}
         <div
           className={`menu-item menu-parent ${
-            isGroupActive(["/users", "/settings"]) ? "active" : ""
+            isGroupActive([
+              "/users",
+              "/settings",
+            ])
+              ? "active"
+              : ""
           }`}
           onClick={() => toggleMenu("system")}
-          onMouseEnter={() => setActiveMenu("system")}
-          onMouseLeave={() => setActiveMenu(null)}
+          onMouseEnter={() => openMenu("system")}
+          onMouseLeave={closeMenuWithDelay}
         >
           <div className="menu-parent-content">
-            <div>
+            <div className="menu-parent-left">
               <span className="menu-icon">⚙️</span>
               <span>Hệ thống</span>
             </div>
@@ -384,6 +444,8 @@ export default function Sidebar() {
           {activeMenu === "system" && (
             <div
               className="dropdown-menu small"
+              onMouseEnter={keepMenuOpen}
+              onMouseLeave={closeMenuWithDelay}
               onClick={(event) => event.stopPropagation()}
             >
               <NavLink
@@ -393,7 +455,8 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                👤 Tài khoản
+                <span>👤</span>
+                <span>Tài khoản</span>
               </NavLink>
 
               <NavLink
@@ -403,13 +466,15 @@ export default function Sidebar() {
                 }
                 onClick={closeMenu}
               >
-                ⚙️ Cấu hình
+                <span>⚙️</span>
+                <span>Cấu hình</span>
               </NavLink>
             </div>
           )}
         </div>
       </div>
 
+      {/* FOOTER */}
       <div className="sidebar-footer">
         <span>TransitGo Management</span>
         <small>Version 1.0.0</small>

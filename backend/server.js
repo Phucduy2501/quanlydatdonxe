@@ -709,84 +709,396 @@ app.post("/api/bookings/create-full", authMiddleware, async(req, res) => {
             tripId,
             passengerName,
             passengerPhone,
-            passengerEmail = null,
+            passengerEmail = "",
             seatIds = [],
             paymentMethod = "cash",
             paidAmount = 0,
             note = "",
         } = req.body;
 
-        const bookingCode = createCode("BK");
-        const totalAmount = Number(req.body.totalAmount || req.body.total_amount || 0);
+        // ================= KIỂM TRA DỮ LIỆU =================
+
+        if (!tripId) {
+            return res.status(400).json({
+                message: "Thiếu mã chuyến xe",
+            });
+        }
+
+        if (!String(passengerName || "").trim()) {
+            return res.status(400).json({
+                message: "Vui lòng nhập tên hành khách",
+            });
+        }
+
+        if (!String(passengerPhone || "").trim()) {
+            return res.status(400).json({
+                message: "Vui lòng nhập số điện thoại",
+            });
+        }
+
+        if (!Array.isArray(seatIds) || seatIds.length === 0) {
+            return res.status(400).json({
+                message: "Vui lòng chọn ít nhất một ghế",
+            });
+        }
+
+        const normalizedName = String(passengerName).trim();
+        const normalizedPhone = String(passengerPhone).trim();
+        const normalizedEmail = String(passengerEmail || "")
+            .trim()
+            .toLowerCase();
+
+        // ================= KIỂM TRA CHUYẾN =================
+
+        const tripResult = await client.query(
+            `
+            SELECT *
+            FROM trips
+            WHERE id = $1
+            LIMIT 1
+            `, [Number(tripId)]
+        );
+
+        const trip = tripResult.rows[0];
+
+        if (!trip) {
+            throw new Error("Chuyến xe không tồn tại");
+        }
+
+        // ================= TÌM KHÁCH HÀNG THẬT =================
+
+        let realCustomerId = null;
+
+        // Kiểm tra customerId frontend gửi lên có tồn tại không
+        if (customerId && !Number.isNaN(Number(customerId))) {
+            const customerById = await client.query(
+                `
+                SELECT id
+                FROM customers
+                WHERE id = $1
+                LIMIT 1
+                `, [Number(customerId)]
+            );
+
+            if (customerById.rows.length > 0) {
+                realCustomerId = customerById.rows[0].id;
+            }
+        }
+
+        // Nếu ID không đúng thì tìm theo số điện thoại/email
+        if (!realCustomerId) {
+            const customerColumns = await getTableColumns("customers");
+
+            const conditions = [];
+            const values = [];
+
+            if (
+                customerColumns.includes("phone") &&
+                normalizedPhone
+            ) {
+                values.push(normalizedPhone);
+                conditions.push(`phone = $${values.length}`);
+            }
+
+            if (
+                customerColumns.includes("email") &&
+                normalizedEmail
+            ) {
+                values.push(normalizedEmail);
+                conditions.push(
+                    `LOWER(email) = LOWER($${values.length})`
+                );
+            }
+
+            if (conditions.length > 0) {
+                const existingCustomer = await client.query(
+                    `
+                    SELECT id
+                    FROM customers
+                    WHERE ${conditions.join(" OR ")}
+                    ORDER BY id ASC
+                    LIMIT 1
+                    `,
+                    values
+                );
+
+                if (existingCustomer.rows.length > 0) {
+                    realCustomerId =
+                        existingCustomer.rows[0].id;
+                }
+            }
+        }
+
+        // ================= TẠO KHÁCH HÀNG NẾU CHƯA CÓ =================
+
+        if (!realCustomerId) {
+            const customerColumns =
+                await getTableColumns("customers");
+
+            const insertColumns = [];
+            const insertValues = [];
+            const placeholders = [];
+
+            function addCustomerField(column, value) {
+                if (
+                    customerColumns.includes(column) &&
+                    value !== undefined
+                ) {
+                    insertColumns.push(`"${column}"`);
+                    insertValues.push(value);
+                    placeholders.push(
+                        `$${insertValues.length}`
+                    );
+                }
+            }
+
+            addCustomerField(
+                "customer_code",
+                createCode("KH")
+            );
+
+            addCustomerField("name", normalizedName);
+            addCustomerField("full_name", normalizedName);
+            addCustomerField(
+                "customer_name",
+                normalizedName
+            );
+
+            addCustomerField("phone", normalizedPhone);
+
+            if (normalizedEmail) {
+                addCustomerField("email", normalizedEmail);
+            }
+
+            addCustomerField("status", "active");
+            addCustomerField("note", "");
+
+            // Một số database customers có password bắt buộc
+            if (customerColumns.includes("password")) {
+                const defaultPassword = await bcrypt.hash(
+                    "123456",
+                    10
+                );
+
+                addCustomerField(
+                    "password",
+                    defaultPassword
+                );
+            }
+
+            if (insertColumns.length === 0) {
+                throw new Error(
+                    "Bảng customers không có cột hợp lệ để tạo khách hàng"
+                );
+            }
+
+            const newCustomerResult = await client.query(
+                `
+                INSERT INTO customers
+                (
+                    ${insertColumns.join(", ")}
+                )
+                VALUES
+                (
+                    ${placeholders.join(", ")}
+                )
+                RETURNING id
+                `,
+                insertValues
+            );
+
+            realCustomerId =
+                newCustomerResult.rows[0].id;
+        }
+
+        // ================= KIỂM TRA GHẾ =================
+
+        const normalizedSeatIds = seatIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+
+        if (normalizedSeatIds.length !== seatIds.length) {
+            throw new Error("Danh sách ghế không hợp lệ");
+        }
+
+        for (const seatId of normalizedSeatIds) {
+            const seatResult = await client.query(
+                `
+                SELECT *
+                FROM bus_seats
+                WHERE id = $1
+                LIMIT 1
+                `, [seatId]
+            );
+
+            if (!seatResult.rows[0]) {
+                throw new Error(
+                    `Không tìm thấy ghế ID ${seatId}`
+                );
+            }
+
+            const bookedResult = await client.query(
+                `
+                SELECT id
+                FROM tickets
+                WHERE trip_id = $1
+                  AND seat_id = $2
+                  AND COALESCE(ticket_status, 'valid')
+                      NOT IN (
+                          'cancelled',
+                          'canceled',
+                          'deleted'
+                      )
+                LIMIT 1
+                `, [Number(tripId), seatId]
+            );
+
+            if (bookedResult.rows.length > 0) {
+                const seatName =
+                    seatResult.rows[0].seat_number ||
+                    seatResult.rows[0].name ||
+                    seatId;
+
+                throw new Error(
+                    `Ghế ${seatName} đã được đặt`
+                );
+            }
+        }
+
+        // ================= TÍNH TIỀN =================
+
+        const seatPrice = Number(trip.price || 0);
+
+        const calculatedTotal =
+            seatPrice * normalizedSeatIds.length;
+
+        const totalAmount = Number(
+            req.body.totalAmount ||
+            req.body.total_amount ||
+            calculatedTotal ||
+            0
+        );
+
         const amountPaid = Number(paidAmount || 0);
+
+        const bookingCode = createCode("BK");
+
+        // ================= TẠO BOOKING =================
 
         const bookingResult = await client.query(
             `
-      INSERT INTO bookings
-      (
-        booking_code,
-        customer_id,
-        trip_id,
-        passenger_name,
-        passenger_phone,
-        passenger_email,
-        total_amount,
-        paid_amount,
-        booking_status,
-        payment_status,
-        note
-      )
-      VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      RETURNING *
-      `, [
+            INSERT INTO bookings
+            (
+                booking_code,
+                customer_id,
+                trip_id,
+                passenger_name,
+                passenger_phone,
+                passenger_email,
+                total_amount,
+                paid_amount,
+                booking_status,
+                payment_status,
+                note
+            )
+            VALUES
+            (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                NULLIF($6, ''),
+                $7,
+                $8,
+                $9,
+                $10,
+                NULLIF($11, '')
+            )
+            RETURNING *
+            `, [
                 bookingCode,
-                customerId || null,
-                tripId || null,
-                passengerName || "",
-                passengerPhone || "",
-                passengerEmail,
+                realCustomerId,
+                Number(tripId),
+                normalizedName,
+                normalizedPhone,
+                normalizedEmail,
                 totalAmount,
                 amountPaid,
-                amountPaid >= totalAmount ? "confirmed" : "pending",
-                amountPaid >= totalAmount ? "paid" : "unpaid",
-                note,
+                amountPaid >= totalAmount ?
+                "confirmed" :
+                "pending",
+                amountPaid >= totalAmount ?
+                "paid" :
+                "unpaid",
+                String(note || "").trim(),
             ]
         );
 
         const booking = bookingResult.rows[0];
         const tickets = [];
 
-        const realSeatIds = Array.isArray(seatIds) ? seatIds : [];
+        // ================= TẠO VÉ =================
 
-        for (const seatId of realSeatIds) {
+        const pricePerSeat =
+            normalizedSeatIds.length > 0 ?
+            totalAmount /
+            normalizedSeatIds.length :
+            seatPrice;
+
+        for (const seatId of normalizedSeatIds) {
+            const seatResult = await client.query(
+                `
+                SELECT *
+                FROM bus_seats
+                WHERE id = $1
+                LIMIT 1
+                `, [seatId]
+            );
+
+            const seat = seatResult.rows[0];
             const ticketCode = createCode("TK");
 
             const ticketResult = await client.query(
                 `
-        INSERT INTO tickets
-        (
-          ticket_code,
-          booking_id,
-          trip_id,
-          seat_id,
-          passenger_name,
-          passenger_phone,
-          price,
-          qr_code,
-          ticket_status
-        )
-        VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        RETURNING *
-        `, [
+                INSERT INTO tickets
+                (
+                    ticket_code,
+                    booking_id,
+                    trip_id,
+                    seat_id,
+                    passenger_name,
+                    passenger_phone,
+                    seat_number,
+                    price,
+                    qr_code,
+                    ticket_status
+                )
+                VALUES
+                (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    $8,
+                    $9,
+                    $10
+                )
+                RETURNING *
+                `, [
                     ticketCode,
                     booking.id,
-                    tripId || null,
-                    seatId || null,
-                    passengerName || "",
-                    passengerPhone || "",
-                    totalAmount,
+                    Number(tripId),
+                    seatId,
+                    normalizedName,
+                    normalizedPhone,
+                    seat.seat_number ||
+                    seat.name ||
+                    String(seatId),
+                    Number(pricePerSeat || 0),
                     ticketCode,
                     "valid",
                 ]
@@ -795,22 +1107,32 @@ app.post("/api/bookings/create-full", authMiddleware, async(req, res) => {
             tickets.push(ticketResult.rows[0]);
         }
 
+        // ================= TẠO THANH TOÁN =================
+
         if (amountPaid > 0) {
             await client.query(
                 `
-        INSERT INTO payments
-        (
-          booking_id,
-          transaction_code,
-          payment_method,
-          amount,
-          payment_status,
-          paid_at,
-          note
-        )
-        VALUES
-        ($1,$2,$3,$4,$5,$6,$7)
-        `, [
+                INSERT INTO payments
+                (
+                    booking_id,
+                    transaction_code,
+                    payment_method,
+                    amount,
+                    payment_status,
+                    paid_at,
+                    note
+                )
+                VALUES
+                (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6,
+                    $7
+                )
+                `, [
                     booking.id,
                     createCode("PM"),
                     paymentMethod,
@@ -833,7 +1155,34 @@ app.post("/api/bookings/create-full", authMiddleware, async(req, res) => {
         });
     } catch (error) {
         await client.query("ROLLBACK");
-        return sendServerError(res, "Lỗi tạo đặt vé", error);
+
+        console.error("Lỗi tạo đặt vé:", error);
+
+        if (error.code === "23503") {
+            return res.status(400).json({
+                message: "Dữ liệu liên kết không tồn tại",
+                error: error.detail || error.message,
+            });
+        }
+
+        if (error.code === "23505") {
+            return res.status(409).json({
+                message: "Ghế hoặc dữ liệu này đã được sử dụng",
+                error: error.detail || error.message,
+            });
+        }
+
+        if (error.code === "23502") {
+            return res.status(400).json({
+                message: "Thiếu dữ liệu bắt buộc trong database",
+                error: error.detail || error.message,
+            });
+        }
+
+        return res.status(500).json({
+            message: "Lỗi tạo đặt vé",
+            error: error.message,
+        });
     } finally {
         client.release();
     }

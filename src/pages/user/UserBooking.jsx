@@ -28,10 +28,20 @@ export default function UserBooking() {
   const [trip, setTrip] = useState(null);
   const [seats, setSeats] = useState([]);
   const [selectedSeats, setSelectedSeats] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   const [form, setForm] = useState({
-    passengerName: customer?.name || "",
-    passengerPhone: customer?.phone || "",
+    passengerName:
+      customer?.name ||
+      customer?.full_name ||
+      customer?.fullName ||
+      "",
+    passengerPhone:
+      customer?.phone ||
+      customer?.phone_number ||
+      customer?.phoneNumber ||
+      "",
     passengerEmail: customer?.email || "",
     paymentMethod: "cash",
     note: "",
@@ -44,18 +54,29 @@ export default function UserBooking() {
   const toArray = (res) => {
     if (Array.isArray(res)) return res;
     if (Array.isArray(res?.data)) return res.data;
+    if (Array.isArray(res?.rows)) return res.rows;
+
     return [];
   };
 
   const loadData = async () => {
     try {
-      const tripRes = await apiGetById("trips", tripId);
-      setTrip(tripRes?.data || tripRes);
+      setLoading(true);
 
-      const seatRes = await apiGetAvailableSeats(tripId);
+      const [tripRes, seatRes] = await Promise.all([
+        apiGetById("trips", tripId),
+        apiGetAvailableSeats(tripId),
+      ]);
+
+      const tripData = tripRes?.data || tripRes;
+
+      setTrip(tripData);
       setSeats(toArray(seatRes));
     } catch (error) {
-      console.log("Lỗi tải đặt vé:", error);
+      console.error("Lỗi tải đặt vé:", error);
+      alert(error.message || "Không thể tải thông tin chuyến xe");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,28 +85,63 @@ export default function UserBooking() {
   };
 
   const toggleSeat = (seat) => {
-    const existed = selectedSeats.find((item) => item.id === seat.id);
+    const seatId = Number(seat.id);
+
+    const existed = selectedSeats.some(
+      (item) => Number(item.id) === seatId
+    );
 
     if (existed) {
-      setSelectedSeats(selectedSeats.filter((item) => item.id !== seat.id));
+      setSelectedSeats((currentSeats) =>
+        currentSeats.filter(
+          (item) => Number(item.id) !== seatId
+        )
+      );
     } else {
-      setSelectedSeats([...selectedSeats, seat]);
+      setSelectedSeats((currentSeats) => [
+        ...currentSeats,
+        seat,
+      ]);
     }
   };
 
   const handleBooking = async () => {
+    if (bookingLoading) return;
+
     if (!customer) {
       alert("Bạn cần đăng nhập trước khi đặt vé");
       navigate("/user/login");
       return;
     }
 
-    if (!form.passengerName.trim()) {
+    const customerId =
+      customer?.customer_id ||
+      customer?.customerId ||
+      customer?.id;
+
+    if (!customerId) {
+      alert(
+        "Không tìm thấy mã khách hàng. Vui lòng đăng nhập lại."
+      );
+
+      localStorage.removeItem("customer_token");
+      localStorage.removeItem("customer_user");
+
+      navigate("/user/login");
+      return;
+    }
+
+    const passengerName = form.passengerName.trim();
+    const passengerPhone = form.passengerPhone.trim();
+    const passengerEmail = form.passengerEmail.trim();
+    const note = form.note.trim();
+
+    if (!passengerName) {
       alert("Vui lòng nhập họ tên");
       return;
     }
 
-    if (!form.passengerPhone.trim()) {
+    if (!passengerPhone) {
       alert("Vui lòng nhập số điện thoại");
       return;
     }
@@ -95,47 +151,85 @@ export default function UserBooking() {
       return;
     }
 
+    if (!tripId) {
+      alert("Không tìm thấy mã chuyến xe");
+      return;
+    }
+
     const price = Number(trip?.price || 0);
     const totalAmount = price * selectedSeats.length;
 
     const payload = {
-      customerId: customer.id,
+      customerId: Number(customerId),
       tripId: Number(tripId),
-      passengerName: form.passengerName,
-      passengerPhone: form.passengerPhone,
-      passengerEmail: form.passengerEmail,
-      seatIds: selectedSeats.map((seat) => seat.id),
+      passengerName,
+      passengerPhone,
+      passengerEmail,
+      seatIds: selectedSeats.map((seat) =>
+        Number(seat.id)
+      ),
       totalAmount,
-      paidAmount: totalAmount,
+      paidAmount:
+        form.paymentMethod === "cash"
+          ? 0
+          : totalAmount,
       paymentMethod: form.paymentMethod,
-      note: form.note,
+      note,
     };
 
+    console.log("Customer đang đăng nhập:", customer);
+    console.log("Payload đặt vé:", payload);
+
     try {
-      await apiCreateFullBooking(payload);
+      setBookingLoading(true);
+
+      const result = await apiCreateFullBooking(payload);
+
+      console.log("Kết quả đặt vé:", result);
 
       alert("Đặt vé thành công");
       navigate("/user/my-ticket");
     } catch (error) {
+      console.error("Lỗi đặt vé:", error);
       alert(error.message || "Lỗi đặt vé");
+    } finally {
+      setBookingLoading(false);
     }
   };
 
-  if (!trip) {
+  if (loading) {
     return (
       <div className="user-web">
-        <div className="user-loading">Đang tải thông tin chuyến...</div>
+        <div className="user-loading">
+          Đang tải thông tin chuyến...
+        </div>
       </div>
     );
   }
 
-  const total = Number(trip.price || 0) * selectedSeats.length;
+  if (!trip) {
+    return (
+      <div className="user-web">
+        <div className="user-loading">
+          Không tìm thấy thông tin chuyến xe.
+        </div>
+      </div>
+    );
+  }
+
+  const total =
+    Number(trip?.price || 0) *
+    selectedSeats.length;
 
   return (
     <div className="user-web">
       <header className="user-navbar">
-        <div className="user-brand" onClick={() => navigate("/user")}>
+        <div
+          className="user-brand"
+          onClick={() => navigate("/user")}
+        >
           <div className="brand-icon">🚌</div>
+
           <div>
             <h2>TransitGo</h2>
             <span>Đặt vé xe</span>
@@ -143,8 +237,17 @@ export default function UserBooking() {
         </div>
 
         <nav>
-          <button onClick={() => navigate("/user/search")}>Quay lại</button>
-          <button onClick={() => navigate("/user/my-ticket")}>Tra cứu vé</button>
+          <button onClick={() => navigate("/user/search")}>
+            Quay lại
+          </button>
+
+          <button
+            onClick={() =>
+              navigate("/user/my-ticket")
+            }
+          >
+            Tra cứu vé
+          </button>
         </nav>
       </header>
 
@@ -153,15 +256,28 @@ export default function UserBooking() {
           <h2>Thông tin chuyến</h2>
 
           <p>
-            Tuyến: <b>{trip.route_name || trip.name || "Chưa có tuyến"}</b>
+            Tuyến:{" "}
+            <b>
+              {trip.route_name ||
+                trip.routeName ||
+                trip.name ||
+                "Chưa có tuyến"}
+            </b>
           </p>
 
           <p>
-            Mã chuyến: <b>{trip.trip_code || trip.code || `CX${trip.id}`}</b>
+            Mã chuyến:{" "}
+            <b>
+              {trip.trip_code ||
+                trip.tripCode ||
+                trip.code ||
+                `CX${trip.id}`}
+            </b>
           </p>
 
           <p>
-            Giá vé: <b>{formatMoney(trip.price)}</b>
+            Giá vé:{" "}
+            <b>{formatMoney(trip.price)}</b>
           </p>
         </div>
 
@@ -169,39 +285,73 @@ export default function UserBooking() {
           <h2>Thông tin hành khách</h2>
 
           <input
+            type="text"
             placeholder="Họ tên hành khách"
             value={form.passengerName}
-            onChange={(e) =>
-              setForm({ ...form, passengerName: e.target.value })
+            onChange={(event) =>
+              setForm({
+                ...form,
+                passengerName: event.target.value,
+              })
             }
           />
 
           <input
+            type="text"
             placeholder="Số điện thoại"
             value={form.passengerPhone}
-            onChange={(e) =>
-              setForm({ ...form, passengerPhone: e.target.value })
+            onChange={(event) =>
+              setForm({
+                ...form,
+                passengerPhone: event.target.value,
+              })
             }
           />
 
           <input
+            type="email"
             placeholder="Email"
             value={form.passengerEmail}
-            onChange={(e) =>
-              setForm({ ...form, passengerEmail: e.target.value })
+            onChange={(event) =>
+              setForm({
+                ...form,
+                passengerEmail: event.target.value,
+              })
             }
           />
 
           <select
             value={form.paymentMethod}
-            onChange={(e) =>
-              setForm({ ...form, paymentMethod: e.target.value })
+            onChange={(event) =>
+              setForm({
+                ...form,
+                paymentMethod: event.target.value,
+              })
             }
           >
-            <option value="cash">Tiền mặt</option>
-            <option value="bank">Chuyển khoản</option>
-            <option value="momo">Ví điện tử</option>
+            <option value="cash">
+              Tiền mặt
+            </option>
+
+            <option value="bank">
+              Chuyển khoản
+            </option>
+
+            <option value="momo">
+              Ví điện tử
+            </option>
           </select>
+
+          <textarea
+            placeholder="Ghi chú"
+            value={form.note}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                note: event.target.value,
+              })
+            }
+          />
         </div>
 
         <div className="booking-panel">
@@ -212,17 +362,38 @@ export default function UserBooking() {
               <p>Chưa có danh sách ghế</p>
             ) : (
               seats.map((seat) => {
-                const active = selectedSeats.find(
-                  (item) => item.id === seat.id
+                const active = selectedSeats.some(
+                  (item) =>
+                    Number(item.id) ===
+                    Number(seat.id)
                 );
+
+                const unavailable =
+                  seat.is_available === false ||
+                  seat.isAvailable === false ||
+                  seat.status === "booked" ||
+                  seat.status === "unavailable";
 
                 return (
                   <button
                     key={seat.id}
-                    className={active ? "seat-user active" : "seat-user"}
+                    type="button"
+                    disabled={unavailable}
+                    className={[
+                      "seat-user",
+                      active ? "active" : "",
+                      unavailable
+                        ? "disabled"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     onClick={() => toggleSeat(seat)}
                   >
-                    {seat.seat_number || seat.name || seat.id}
+                    {seat.seat_number ||
+                      seat.seatNumber ||
+                      seat.name ||
+                      seat.id}
                   </button>
                 );
               })
@@ -234,8 +405,15 @@ export default function UserBooking() {
             <b>{formatMoney(total)}</b>
           </div>
 
-          <button className="confirm-booking-btn" onClick={handleBooking}>
-            Xác nhận đặt vé
+          <button
+            type="button"
+            className="confirm-booking-btn"
+            onClick={handleBooking}
+            disabled={bookingLoading}
+          >
+            {bookingLoading
+              ? "Đang đặt vé..."
+              : "Xác nhận đặt vé"}
           </button>
         </div>
       </section>
